@@ -1,0 +1,11 @@
+{
+  "id": "files",
+  "name": "Files",
+  "icon": "📁",
+  "color": "#3d6fd6",
+  "url": "index.html",
+  "category": "system",
+  "width": 860,
+  "height": 560,
+  "description": "Browse your Documents"
+}

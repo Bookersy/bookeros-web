@@ -1,0 +1,11 @@
+{
+  "id": "terminal",
+  "name": "Terminal",
+  "icon": "⌨️",
+  "color": "#1d2230",
+  "url": "index.html",
+  "category": "system",
+  "width": 820,
+  "height": 520,
+  "description": "Run shell commands"
+}

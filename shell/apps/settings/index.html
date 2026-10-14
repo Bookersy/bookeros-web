@@ -1,0 +1,164 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Settings</title>
+<link rel="stylesheet" href="../../ui/app.css">
+<script src="../../ui/wallpapers.js"></script>
+<script src="../../ui/network.js"></script>
+<style>
+  body { display: grid; grid-template-columns: 220px 1fr; height: 100vh; }
+  nav { padding: 14px 0; }
+  nav h2 { font-size: 20px; font-weight: 400; margin: 4px 24px 14px; }
+  nav .item { display: flex; gap: 14px; align-items: center; padding: 10px 24px; border-radius: 0 24px 24px 0; cursor: pointer; margin-right: 12px; }
+  nav .item:hover { background: var(--bg2); }
+  nav .item.on { background: var(--accent-soft); font-weight: 500; }
+  main { overflow: auto; padding: 22px 30px; background: var(--bg2); }
+  section { display: none; max-width: 640px; }
+  section.on { display: block; }
+  h3 { font-weight: 400; font-size: 22px; margin: 0 0 16px; }
+  .group { background: var(--bg); border-radius: 16px; overflow: hidden; margin-bottom: 18px; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+  .row:last-child { border-bottom: 0; }
+  .row .l { flex: 1; } .row .l small { display: block; color: var(--muted); }
+  .walls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 16px; }
+  .wall { aspect-ratio: 16/10; border-radius: 14px; cursor: pointer; position: relative; border: 3px solid transparent; }
+  .wall.on { border-color: var(--accent); }
+  .wall span { position: absolute; left: 10px; bottom: 6px; font-size: 12px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.6); }
+  .accs { display: flex; gap: 10px; }
+  .acc { width: 30px; height: 30px; border-radius: 50%; cursor: pointer; }
+  .acc.on { outline: 3px solid var(--text); outline-offset: 2px; }
+  .seg { display: flex; background: var(--bg2); border-radius: 999px; padding: 3px; }
+  .seg button { border: 0; color: var(--text); padding: 6px 16px; }
+  .seg button.on { background: var(--accent); color: var(--on-accent); }
+  .app { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .app .tx { min-width: 0; }
+  .app .n, .app .d { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row button { flex: none; }
+  .ic { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-size: 16px; flex: none; }
+  dl { display: grid; grid-template-columns: 140px 1fr; gap: 10px 16px; margin: 0; padding: 16px 18px; }
+  dt { color: var(--muted); } dd { margin: 0; user-select: text; }
+</style>
+</head>
+<body>
+<nav>
+  <h2>Settings</h2>
+  <div class="item on" data-s="wallpaper">🎨 Personalisation</div>
+  <div class="item" data-s="network">📶 Network</div>
+  <div class="item" data-s="display">🖥️ Display</div>
+  <div class="item" data-s="apps">🧩 Apps</div>
+  <div class="item" data-s="account">👤 Account</div>
+  <div class="item" data-s="about">ℹ️ About BookerOS</div>
+</nav>
+<main>
+  <section id="wallpaper" class="on">
+    <h3>Personalisation</h3>
+    <div class="group">
+      <div class="row"><div class="l">Theme<small>Light or dark look for the system and apps</small></div>
+        <div class="seg" id="theme"><button data-v="light">Light</button><button data-v="dark">Dark</button></div></div>
+      <div class="row"><div class="l">Accent colour</div><div class="accs" id="accs"></div></div>
+    </div>
+    <div class="group"><div class="row"><div class="l">Wallpaper<small>Right-click the desktop to come back here</small></div></div><div class="walls" id="walls"></div></div>
+  </section>
+  <section id="network">
+    <h3>Network</h3>
+    <div class="group">
+      <div class="row"><div class="l">Computer name<small id="hosthint">Lowercase letters, numbers and dashes</small></div>
+        <input id="host" style="width:220px" spellcheck="false"><button class="tonal" id="hostsave">Save</button></div>
+    </div>
+    <div id="netpanel"></div>
+  </section>
+  <section id="display">
+    <h3>Display</h3>
+    <div class="group">
+      <div class="row"><div class="l">Resolution<small id="cur"></small></div><select id="res"></select></div>
+    </div>
+    <p class="muted">Tip: in VirtualBox, choose View → Virtual Screen to scale the window if text looks too small.</p>
+  </section>
+  <section id="apps">
+    <h3>Apps</h3>
+    <div class="group" id="applist"></div>
+    <button class="primary" onclick="os.apps.launch('store')">Add web apps in App Store</button>
+  </section>
+  <section id="account">
+    <h3>Account</h3>
+    <div class="group">
+      <div class="row"><div class="l">Your name<small>Shown on the launcher and in the terminal prompt</small></div><input id="uname" style="width:200px"></div>
+    </div>
+  </section>
+  <section id="about">
+    <h3>About BookerOS</h3>
+    <div class="group"><dl id="info"></dl></div>
+    <p class="muted">BookerOS Web is a web-first operating system: every app is a web page running in its own window.
+      Built on Linux, X11 and WebKitGTK.</p>
+  </section>
+</main>
+<script>
+const $ = (s) => document.querySelector(s);
+let s = {};
+function go(id) {
+  document.querySelectorAll("section").forEach((x) => x.classList.toggle("on", x.id === id));
+  document.querySelectorAll("nav .item").forEach((x) => x.classList.toggle("on", x.dataset.s === id));
+  if (id === "display") loadDisplay();
+  if (id === "about") loadAbout();
+  if (id === "apps") loadApps();
+  if (id === "network") { if (!window.np) window.np = NetworkPanel($("#netpanel")); else np.refresh(); }
+}
+document.querySelectorAll("nav .item").forEach((i) => (i.onclick = () => go(i.dataset.s)));
+function render() {
+  document.querySelectorAll("#theme button").forEach((b) => b.classList.toggle("on", b.dataset.v === s.theme));
+  $("#walls").innerHTML = "";
+  Object.entries(WALLPAPERS).forEach(([k, w]) => {
+    const d = document.createElement("div"); d.className = "wall" + (k === s.wallpaper ? " on" : "");
+    d.style.background = w.css; d.innerHTML = `<span>${w.name}</span>`;
+    d.onclick = () => os.settings.set("wallpaper", k); $("#walls").appendChild(d);
+  });
+  $("#accs").innerHTML = "";
+  Object.entries(s.accents).forEach(([k, v]) => {
+    const d = document.createElement("div"); d.className = "acc" + (k === s.accent ? " on" : "");
+    d.style.background = v.light[0]; d.title = k; d.onclick = () => os.settings.set("accent", k); $("#accs").appendChild(d);
+  });
+  if (document.activeElement !== $("#uname")) $("#uname").value = s.username;
+  if (document.activeElement !== $("#host")) $("#host").value = s.hostname || "";
+}
+document.querySelectorAll("#theme button").forEach((b) => (b.onclick = () => os.settings.set("theme", b.dataset.v)));
+$("#hostsave").onclick = async () => {
+  try { await os.system.setHostname($("#host").value.trim()); $("#hosthint").textContent = "Saved"; $("#hosthint").style.color = ""; }
+  catch (e) { $("#hosthint").textContent = e.message; $("#hosthint").style.color = "var(--danger)"; }
+};
+$("#uname").onchange = (e) => e.target.value.trim() && os.settings.set("username", e.target.value.trim());
+async function loadDisplay() {
+  const [modes, info] = await Promise.all([os.system.resolutions(), os.system.info()]);
+  $("#cur").textContent = "Current: " + info.screen;
+  $("#res").innerHTML = modes.map((m) => `<option ${m === info.screen ? "selected" : ""}>${m}</option>`).join("") || "<option>Not available</option>";
+}
+$("#res").onchange = (e) => os.settings.set("resolution", e.target.value);
+async function loadAbout() {
+  const i = await os.system.info();
+  const up = `${Math.floor(i.uptime / 3600)}h ${Math.floor(i.uptime / 60) % 60}m`;
+  const rows = [["Version", i.os], ["Kernel", "Linux " + i.kernel], ["Web engine", "WebKitGTK " + i.webkit], ["Processor", `${i.cpu} (${i.cores} cores)`],
+    ["Memory", `${i.memAvailMB} MB free of ${i.memTotalMB} MB`], ["Network", i.ip || "Not connected"], ["Display", i.screen], ["Apps installed", i.apps], ["Uptime", up]];
+  $("#info").innerHTML = rows.map(([a, b]) => `<dt>${a}</dt><dd>${String(b).replace(/</g, "&lt;")}</dd>`).join("");
+}
+async function loadApps() {
+  const apps = await os.apps.list();
+  $("#applist").innerHTML = "";
+  apps.forEach((a) => {
+    const r = document.createElement("div"); r.className = "row";
+    r.innerHTML = `<div class="app l">${os.tile(a, "ic")}<div class="tx"><span class="n"></span><small class="d"></small></div></div>`;
+    r.querySelector(".n").textContent = a.name; r.querySelector(".d").textContent = a.description || "";
+    const pin = document.createElement("button"); pin.className = "ghost";
+    pin.textContent = (s.pinned || []).includes(a.id) ? "Unpin" : "Pin to shelf";
+    pin.onclick = () => os.call("shelf.togglePin", a.id).then(() => setTimeout(loadApps, 100));
+    r.appendChild(pin);
+    if (!a.system) { const u = document.createElement("button"); u.className = "ghost danger"; u.textContent = "Uninstall"; u.onclick = () => os.apps.uninstall(a.id).then(loadApps); r.appendChild(u); }
+    $("#applist").appendChild(r);
+  });
+}
+os.on("settings", (n) => { s = n; render(); });
+os.on("apps", () => $("#apps").classList.contains("on") && loadApps());
+os.on("open", (sec) => go(sec));
+os.settings.get().then((n) => { s = n; render(); if (os.arg) go(os.arg); });
+</script>
+</body>
+</html>

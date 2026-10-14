@@ -1,0 +1,12 @@
+{
+  "id": "maps",
+  "name": "Maps",
+  "icon": "🗺️",
+  "color": "#2d7d46",
+  "url": "https://www.openstreetmap.org",
+  "category": "web",
+  "width": 1100,
+  "height": 740,
+  "description": "OpenStreetMap",
+  "autoName": true
+}

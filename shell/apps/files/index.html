@@ -1,0 +1,114 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Files</title>
+<link rel="stylesheet" href="../../ui/app.css">
+<style>
+  body { display: grid; grid-template-columns: 200px 1fr; height: 100vh; }
+  nav { background: var(--bg); padding: 12px 8px; border-right: 1px solid var(--line); }
+  nav .item { display: flex; gap: 12px; align-items: center; padding: 9px 14px; border-radius: 0 20px 20px 0; cursor: pointer; margin-left: -8px; padding-left: 22px; }
+  nav .item:hover { background: var(--bg2); }
+  nav .item.on { background: var(--accent-soft); font-weight: 500; }
+  main { display: flex; flex-direction: column; min-width: 0; }
+  #crumbs { display: flex; gap: 2px; align-items: center; font-size: 15px; }
+  #crumbs span { padding: 4px 8px; border-radius: 8px; cursor: pointer; }
+  #crumbs span:hover { background: var(--bg2); }
+  #list { flex: 1; overflow: auto; padding: 4px 8px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  td { padding: 9px 10px; }
+  tr.row { cursor: default; }
+  tr.row:hover td { background: var(--bg2); }
+  tr.row.sel td { background: var(--accent-soft); }
+  tr.row td:first-child { border-radius: 10px 0 0 10px; }
+  tr.row td:last-child { border-radius: 0 10px 10px 0; }
+  .nm { display: flex; align-items: center; gap: 10px; }
+  .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .empty div { font-size: 46px; }
+  #preview { position: fixed; inset: 0; background: rgba(0,0,0,.75); display: none; place-items: center; }
+  #preview img { max-width: 90vw; max-height: 85vh; border-radius: 8px; }
+</style>
+</head>
+<body>
+<nav>
+  <div class="item on" data-p="">📄 My files</div>
+  <div class="item" data-p="Downloads">⬇️ Downloads</div>
+  <div class="item" data-p="Pictures">🖼️ Pictures</div>
+</nav>
+<main>
+  <div class="toolbar">
+    <div id="crumbs"></div>
+    <div class="spacer"></div>
+    <button class="ghost" id="newfile">＋ New file</button>
+    <button class="ghost" id="newdir">＋ New folder</button>
+    <button class="ghost" id="ren" disabled>Rename</button>
+    <button class="ghost danger" id="del" disabled>Delete</button>
+  </div>
+  <div id="list"></div>
+</main>
+<div id="preview"><img id="pimg"></div>
+<div class="toast" id="toast"></div>
+<script>
+const $ = (s) => document.querySelector(s);
+let cwd = "", sel = null;
+const join = (a, b) => (a ? a + "/" : "") + b;
+const iconFor = (e) => e.dir ? "📁" : /\.(png|jpe?g|gif|svg|webp)$/i.test(e.name) ? "🖼️" : /\.(txt|md|log|json|csv|html|js|css|py|sh)$/i.test(e.name) ? "📄" : "📦";
+const size = (n) => n < 1024 ? n + " B" : n < 1048576 ? (n / 1024).toFixed(1) + " KB" : (n / 1048576).toFixed(1) + " MB";
+function toast(t) { const el = $("#toast"); el.textContent = t; el.classList.add("show"); setTimeout(() => el.classList.remove("show"), 1800); }
+async function load(p) {
+  cwd = p; sel = null; upd();
+  document.querySelectorAll("nav .item").forEach((i) => i.classList.toggle("on", i.dataset.p === p.split("/")[0] && (p.split("/").length === 1 || i.dataset.p !== "")));
+  const c = $("#crumbs");
+  c.innerHTML = "";
+  const parts = p ? p.split("/") : [];
+  [["My files", ""], ...parts.map((x, i) => [x, parts.slice(0, i + 1).join("/")])].forEach(([n, path], i) => {
+    if (i) c.append("›");
+    const s = document.createElement("span"); s.textContent = n; s.onclick = () => load(path); c.append(s);
+  });
+  let ents;
+  try { ents = await os.fs.list(p); } catch (e) { await os.fs.mkdir(p); ents = []; }
+  const list = $("#list");
+  if (!ents.length) { list.innerHTML = `<div class="empty"><div>🗂️</div>This folder is empty</div>`; return; }
+  let h = `<table><tr><th>Name</th><th style="width:110px">Size</th><th style="width:170px">Modified</th></tr>`;
+  ents.forEach((e, i) => {
+    h += `<tr class="row" data-i="${i}"><td><div class="nm">${iconFor(e)} <span></span></div></td>
+      <td class="muted">${e.dir ? "—" : size(e.size)}</td>
+      <td class="muted">${new Date(e.mtime * 1000).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</td></tr>`;
+  });
+  list.innerHTML = h + "</table>";
+  list.querySelectorAll("tr.row").forEach((tr) => {
+    const e = ents[tr.dataset.i];
+    tr.querySelector(".nm span").textContent = e.name;
+    tr.onclick = () => { list.querySelectorAll(".sel").forEach((x) => x.classList.remove("sel")); tr.classList.add("sel"); sel = e; upd(); };
+    tr.ondblclick = () => open(e);
+  });
+}
+function upd() { $("#del").disabled = $("#ren").disabled = !sel; }
+async function open(e) {
+  const p = join(cwd, e.name);
+  if (e.dir) return load(p);
+  if (/\.(png|jpe?g|gif|svg|webp)$/i.test(e.name)) {
+    if (/\.png$/i.test(e.name)) return os.apps.launch("paint", p);
+    $("#pimg").src = await os.fs.readDataURL(p); $("#preview").style.display = "grid"; return;
+  }
+  os.apps.launch("notes", p);
+}
+$("#preview").onclick = () => ($("#preview").style.display = "none");
+$("#newdir").onclick = async () => { const n = prompt("Folder name", "New folder"); if (n) { await os.fs.mkdir(join(cwd, n)); load(cwd); } };
+$("#newfile").onclick = async () => { const n = prompt("File name", "Untitled.txt"); if (n) { await os.fs.write(join(cwd, n), ""); load(cwd); os.apps.launch("notes", join(cwd, n)); } };
+$("#ren").onclick = async () => { if (!sel) return; const n = prompt("Rename to", sel.name); if (n && n !== sel.name) { await os.fs.rename(join(cwd, sel.name), join(cwd, n)); load(cwd); } };
+$("#del").onclick = async () => { if (sel && confirm(`Delete “${sel.name}”?`)) { await os.fs.remove(join(cwd, sel.name)); toast("Deleted " + sel.name); load(cwd); } };
+document.querySelectorAll("nav .item").forEach((i) => (i.onclick = () => load(i.dataset.p)));
+document.addEventListener("keydown", (e) => { if (e.key === "Delete") $("#del").click(); if (e.key === "Backspace" && cwd && document.activeElement === document.body) load(cwd.split("/").slice(0, -1).join("/")); });
+os.on("download", () => load(cwd));
+(async () => {
+  for (const d of ["Downloads", "Pictures"]) await os.fs.mkdir(d);
+  const list = await os.fs.list("");
+  if (!list.some((e) => e.name === "Welcome.txt"))
+    await os.fs.write("Welcome.txt", "Welcome to BookerOS Web!\n\nThese files live in your Documents folder.\nDouble-click a text file to edit it in Notes.\n");
+  load(os.arg || "");
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Calculator</title>
+<link rel="stylesheet" href="../../ui/app.css">
+<style>
+  body { display: flex; flex-direction: column; height: 100vh; padding: 14px; gap: 12px; }
+  .screen { background: var(--bg2); border-radius: 24px; padding: 16px 20px; text-align: right; min-height: 110px; display: flex; flex-direction: column; justify-content: flex-end; }
+  #expr { color: var(--muted); font-size: 16px; min-height: 22px; word-break: break-all; }
+  #out { font-size: 42px; font-weight: 300; word-break: break-all; line-height: 1.2; user-select: text; }
+  .keys { flex: 1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .keys button { border: 0; border-radius: 999px; font-size: 20px; color: var(--text); background: var(--bg2); padding: 0; }
+  .keys button:hover { filter: brightness(.96); background: var(--bg3); }
+  .keys .op { background: var(--accent-soft); }
+  .keys .eq { background: var(--accent); color: var(--on-accent); }
+  .keys .fn { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="screen"><div id="expr"></div><div id="out">0</div></div>
+<div class="keys" id="keys"></div>
+<script>
+const keys = ["C","(",")","÷","7","8","9","×","4","5","6","−","1","2","3","+","±","0",".","="];
+let expr = "", fresh = false;
+const out = document.getElementById("out"), ex = document.getElementById("expr");
+keys.forEach((k) => {
+  const b = document.createElement("button");
+  b.textContent = k;
+  b.className = "÷×−+".includes(k) ? "op" : k === "=" ? "eq" : "C()±".includes(k) ? "fn" : "";
+  b.onclick = () => press(k);
+  document.getElementById("keys").appendChild(b);
+});
+function evaluate(s) {
+  const js = s.replace(/÷/g, "/").replace(/×/g, "*").replace(/−/g, "-");
+  if (!/^[0-9+\-*/().\s]*$/.test(js)) throw new Error("bad");
+  const v = Function(`"use strict";return (${js || 0})`)();
+  if (!isFinite(v)) throw new Error("Can't divide by zero");
+  return +parseFloat(v.toPrecision(12));
+}
+function show() {
+  out.textContent = expr || "0";
+  try { const v = evaluate(expr); ex.textContent = expr && String(v) !== expr ? "= " + v : ""; } catch { ex.textContent = ""; }
+}
+function press(k) {
+  if (k === "C") { expr = ""; }
+  else if (k === "=") {
+    try { const v = evaluate(expr); ex.textContent = expr + " ="; out.textContent = v; expr = String(v); fresh = true; return; }
+    catch (e) { out.textContent = e.message === "bad" ? "Error" : e.message; expr = ""; return; }
+  }
+  else if (k === "±") { expr = expr.startsWith("−(") ? expr.slice(2, -1) : expr ? "−(" + expr + ")" : "−"; }
+  else if (k === "⌫") { expr = expr.slice(0, -1); }
+  else { if (fresh && /[0-9.(]/.test(k)) expr = ""; expr += k; }
+  fresh = false; show();
+}
+document.addEventListener("keydown", (e) => {
+  const map = { "/": "÷", "*": "×", "-": "−", "+": "+", Enter: "=", "=": "=", Escape: "C", Backspace: "⌫", ".": ".", "(": "(", ")": ")" };
+  if (/^[0-9]$/.test(e.key)) press(e.key);
+  else if (map[e.key]) { e.preventDefault(); press(map[e.key]); }
+});
+</script>
+</body>
+</html>

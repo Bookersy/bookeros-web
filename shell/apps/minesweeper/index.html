@@ -1,0 +1,60 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Mines</title>
+<link rel="stylesheet" href="../../ui/app.css">
+<style>
+  body { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: var(--bg2); }
+  .bar { display: flex; gap: 18px; align-items: center; }
+  #face { font-size: 22px; padding: 4px 12px; }
+  #grid { display: grid; gap: 3px; background: var(--bg); padding: 10px; border-radius: 18px; box-shadow: var(--shadow); }
+  .c { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; font-weight: 700; font-size: 15px; cursor: pointer; background: var(--accent-soft); }
+  .c:hover { filter: brightness(.95); }
+  .c.open { background: var(--bg2); cursor: default; }
+  .c.boom { background: #f28b82; }
+  .n1 { color: #1a73e8; } .n2 { color: #188038; } .n3 { color: #d93025; } .n4 { color: #6a1b9a; } .n5 { color: #b06000; } .n6 { color: #00796b; } .n7, .n8 { color: var(--text); }
+</style>
+</head>
+<body>
+<div class="bar"><span>💣 <b id="left">10</b></span><button class="ghost" id="face">🙂</button><span>⏱ <b id="time">0</b></span></div>
+<div id="grid"></div>
+<div class="muted" style="font-size:13px">Click to reveal · Right-click to flag</div>
+<script>
+const W = 10, H = 10, M = 12;
+let cells, started, over, t0, tick, flags;
+const $ = (s) => document.querySelector(s);
+function init() {
+  cells = Array.from({ length: W * H }, () => ({ mine: false, open: false, flag: false, n: 0 }));
+  started = over = false; flags = 0; clearInterval(tick); $("#time").textContent = 0; $("#face").textContent = "🙂"; $("#left").textContent = M;
+  const g = $("#grid"); g.style.gridTemplateColumns = `repeat(${W}, 32px)`; g.innerHTML = "";
+  cells.forEach((c, i) => {
+    const d = document.createElement("div"); d.className = "c"; c.el = d;
+    d.onclick = () => reveal(i);
+    d.oncontextmenu = (e) => { e.preventDefault(); if (c.open || over) return; c.flag = !c.flag; flags += c.flag ? 1 : -1; d.textContent = c.flag ? "🚩" : ""; $("#left").textContent = M - flags; };
+    g.appendChild(d);
+  });
+}
+const nb = (i) => { const x = i % W, y = (i / W) | 0, r = []; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const a = x + dx, b = y + dy; if ((dx || dy) && a >= 0 && b >= 0 && a < W && b < H) r.push(b * W + a); } return r; };
+function plant(safe) {
+  const avoid = new Set([safe, ...nb(safe)]); let k = 0;
+  while (k < M) { const i = Math.floor(Math.random() * W * H); if (!cells[i].mine && !avoid.has(i)) { cells[i].mine = true; k++; } }
+  cells.forEach((c, i) => (c.n = nb(i).filter((j) => cells[j].mine).length));
+  started = true; t0 = Date.now(); tick = setInterval(() => ($("#time").textContent = ((Date.now() - t0) / 1000) | 0), 500);
+}
+function reveal(i) {
+  const c = cells[i]; if (over || c.open || c.flag) return;
+  if (!started) plant(i);
+  if (c.mine) { over = true; clearInterval(tick); c.el.classList.add("boom"); cells.forEach((x) => x.mine && (x.el.textContent = "💣")); $("#face").textContent = "😵"; return; }
+  const st = [i];
+  while (st.length) {
+    const j = st.pop(), x = cells[j]; if (x.open || x.flag) continue;
+    x.open = true; x.el.classList.add("open"); if (x.n) { x.el.textContent = x.n; x.el.classList.add("n" + x.n); } else st.push(...nb(j));
+  }
+  if (cells.filter((x) => !x.open).length === M) { over = true; clearInterval(tick); $("#face").textContent = "😎"; cells.forEach((x) => x.mine && (x.el.textContent = "🚩")); }
+}
+$("#face").onclick = init;
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "id": "calculator",
+  "name": "Calculator",
+  "icon": "🧮",
+  "color": "#4b5568",
+  "url": "index.html",
+  "category": "tools",
+  "width": 340,
+  "height": 520,
+  "description": "Everyday arithmetic"
+}

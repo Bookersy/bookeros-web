@@ -1,0 +1,55 @@
+# Builds the BookerOS Web ISO on GitHub's servers and publishes it as a release.
+# Runs on every push to the main branch, or manually from the Actions tab ("Run workflow").
+name: Build ISO
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to publish the release
+
+concurrency:
+  group: build-iso
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Get the source
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q debootstrap squashfs-tools grub-pc-bin grub-efi-amd64-bin xorriso mtools curl
+
+      - name: Build the ISO (about 15-25 minutes)
+        run: |
+          BUILD=$(ls build.sh webos/build.sh 2>/dev/null | head -1)
+          if [ -z "$BUILD" ]; then echo "::error::build.sh not found - upload the contents of the webos folder"; exit 1; fi
+          chmod +x "$BUILD"
+          sudo OUT="$RUNNER_TEMP/bookeros-web.iso" "./$BUILD" "$RUNNER_TEMP/work" 2>&1 | tee "$RUNNER_TEMP/build.log"
+          sudo chown "$USER" "$RUNNER_TEMP/bookeros-web.iso"
+          ls -lh "$RUNNER_TEMP/bookeros-web.iso"
+          if grep -q "building without Firefox\|Firefox install failed" "$RUNNER_TEMP/build.log"; then
+            echo "::warning::Firefox could not be installed; this ISO uses the built-in browser"
+          fi
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd "$RUNNER_TEMP"
+          sha256sum bookeros-web.iso > bookeros-web.iso.sha256
+          TAG="build-${{ github.run_number }}"
+          gh release create "$TAG" bookeros-web.iso bookeros-web.iso.sha256 \
+            --repo "${{ github.repository }}" \
+            --title "BookerOS Web (build ${{ github.run_number }})" \
+            --notes "Built from commit ${{ github.sha }}. Download **bookeros-web.iso** and attach it to your VirtualBox VM's optical drive." \
+            --latest
+          echo "### ISO ready" >> "$GITHUB_STEP_SUMMARY"
+          echo "Download: https://github.com/${{ github.repository }}/releases/latest" >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,25 @@
+#!/bin/sh
+# BookerOS Web graphical session
+export GDK_BACKEND=x11
+export LANG=en_GB.UTF-8
+export WEBKIT_DISABLE_DMABUF_RENDERER=1
+export NO_AT_BRIDGE=1
+xsetroot -solid '#b8dccb' -cursor_name left_ptr
+xset s off -dpms s noblank 2>/dev/null
+command -v VBoxClient >/dev/null && { VBoxClient --vmsvga 2>/dev/null; VBoxClient --clipboard 2>/dev/null; }
+# pick a comfortable default resolution unless the user chose one in Settings
+if ! grep -q '"resolution": "[0-9]' "$HOME/.local/share/bookeros/settings.json" 2>/dev/null; then
+  OUT=$(xrandr | awk '/ connected/{print $1; exit}')
+  for m in 1440x900 1366x768 1280x800 1280x720; do
+    xrandr | grep -q "^   $m " && { xrandr --output "$OUT" --mode $m; break; }
+  done
+fi
+xcompmgr -c -C -r 12 -o .30 -l -14 -t -10 &
+# tapping the Windows/Super key on its own opens the launcher (Openbox maps Super+Space to it)
+command -v xcape >/dev/null && xcape -e 'Super_L=Super_L|space;Super_R=Super_R|space' &
+openbox --config-file /etc/xdg/openbox/bookeros-rc.xml &
+sleep 0.5
+while true; do
+  python3 /opt/bookeros/shell.py --name bookeros-shell
+  sleep 1   # restart the shell if it ever crashes
+done

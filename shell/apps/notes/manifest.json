@@ -1,0 +1,11 @@
+{
+  "id": "notes",
+  "name": "Notes",
+  "icon": "📝",
+  "color": "#e0a43a",
+  "url": "index.html",
+  "category": "tools",
+  "width": 820,
+  "height": 600,
+  "description": "Write and save text files"
+}

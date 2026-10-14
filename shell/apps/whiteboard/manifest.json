@@ -1,0 +1,12 @@
+{
+  "id": "whiteboard",
+  "name": "Whiteboard",
+  "icon": "✏️",
+  "color": "#6965db",
+  "url": "https://excalidraw.com",
+  "category": "web",
+  "width": 1150,
+  "height": 760,
+  "description": "Excalidraw sketching",
+  "autoName": true
+}

@@ -1,0 +1,11 @@
+{
+  "id": "clock",
+  "name": "Clock",
+  "icon": "⏰",
+  "color": "#c2566b",
+  "url": "index.html",
+  "category": "tools",
+  "width": 520,
+  "height": 520,
+  "description": "Stopwatch and timer"
+}

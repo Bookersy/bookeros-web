@@ -1,0 +1,11 @@
+{
+  "id": "minesweeper",
+  "name": "Mines",
+  "icon": "💣",
+  "color": "#8a5a3c",
+  "url": "index.html",
+  "category": "games",
+  "width": 470,
+  "height": 580,
+  "description": "Minesweeper"
+}

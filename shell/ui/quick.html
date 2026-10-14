@@ -1,0 +1,99 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Quick Settings</title>
+<link rel="stylesheet" href="app.css">
+<style>
+  html, body { background: transparent; overflow: hidden; }
+  .bubble {
+    position: fixed; inset: 10px; background: var(--bg); border-radius: 24px; box-shadow: 0 6px 24px rgba(0,0,0,.28);
+    padding: 16px; display: flex; flex-direction: column; gap: 14px;
+  }
+  .top { display: flex; align-items: center; gap: 8px; }
+  .avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-weight: 700; }
+  .round { width: 36px; height: 36px; padding: 0; display: grid; place-items: center; border-radius: 50%; color: var(--text); font-size: 16px; }
+  .round:hover { background: var(--bg2); }
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .tile {
+    display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 20px; cursor: pointer;
+    background: var(--bg2); min-height: 60px;
+  }
+  .tile.on { background: var(--accent); color: var(--on-accent); }
+  .tile .ic { font-size: 18px; width: 22px; text-align: center; }
+  .tile b { display: block; font-weight: 500; font-size: 13.5px; }
+  .tile small { display: block; font-size: 12px; opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 110px; }
+  .cal { background: var(--bg2); border-radius: 20px; padding: 12px 14px; }
+  .cal h3 { margin: 0 0 8px; font-size: 14px; font-weight: 500; }
+  .cal table { width: 100%; border-collapse: collapse; text-align: center; font-size: 12px; }
+  .cal th { color: var(--muted); font-weight: 500; padding: 2px; }
+  .cal td { padding: 4px 0; }
+  .cal td.today span { background: var(--accent); color: var(--on-accent); border-radius: 50%; display: inline-block; width: 24px; height: 24px; line-height: 24px; }
+  .cal td.other { color: var(--muted); opacity: .5; }
+</style>
+</head>
+<body>
+<div class="bubble">
+  <div class="top">
+    <div class="avatar" id="av">B</div>
+    <div><div id="user" style="font-weight:500">booker</div><div class="muted" style="font-size:12px">Live session</div></div>
+    <div class="spacer"></div>
+    <button class="round" id="lock" title="Restart">↻</button>
+    <button class="round" id="off" title="Shut down">⏻</button>
+    <button class="round" id="set" title="Settings">⚙️</button>
+  </div>
+  <div class="tiles">
+    <div class="tile" id="net"><div class="ic">📶</div><div><b>Network</b><small id="netinfo">Checking…</small></div></div>
+    <div class="tile" id="dark"><div class="ic">🌙</div><div><b>Dark theme</b><small id="darkinfo">Off</small></div></div>
+    <div class="tile" id="accent"><div class="ic">🎨</div><div><b>Accent</b><small id="accinfo">Blue</small></div></div>
+    <div class="tile" id="display"><div class="ic">🖥️</div><div><b>Display</b><small id="res"></small></div></div>
+  </div>
+  <div class="cal" id="cal"></div>
+</div>
+<script>
+const $ = (s) => document.querySelector(s);
+let settings = {};
+const ACC = ["blue", "green", "purple", "pink", "orange"];
+function show(s) {
+  settings = s;
+  $("#dark").classList.toggle("on", s.theme === "dark");
+  $("#darkinfo").textContent = s.theme === "dark" ? "On" : "Off";
+  $("#accinfo").textContent = s.accent[0].toUpperCase() + s.accent.slice(1);
+  $("#user").textContent = s.username;
+  $("#av").textContent = (s.username || "B")[0].toUpperCase();
+}
+function refresh() {
+  os.system.info().then((i) => {
+    $("#netinfo").textContent = i.ip ? i.ip.split(" ")[0] : "Not connected";
+    $("#net").classList.toggle("on", !!i.ip);
+    $("#res").textContent = i.screen;
+  });
+  const n = new Date(), y = n.getFullYear(), m = n.getMonth();
+  const first = new Date(y, m, 1), start = (first.getDay() + 6) % 7;
+  let h = `<h3>${n.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</h3><table><tr>`;
+  ["M","T","W","T","F","S","S"].forEach((d) => h += `<th>${d}</th>`);
+  h += "</tr><tr>";
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(y, m, 1 - start + i);
+    if (i && i % 7 === 0) { if (d.getMonth() !== m) break; h += "</tr><tr>"; }
+    const cls = d.getMonth() !== m ? "other" : d.getDate() === n.getDate() ? "today" : "";
+    h += `<td class="${cls}"><span>${d.getDate()}</span></td>`;
+  }
+  $("#cal").innerHTML = h + "</tr></table>";
+}
+$("#dark").onclick = () => os.settings.set("theme", settings.theme === "dark" ? "light" : "dark");
+$("#accent").onclick = () => os.settings.set("accent", ACC[(ACC.indexOf(settings.accent) + 1) % ACC.length]);
+$("#display").onclick = () => { os.call("system.quick"); os.apps.launch("settings", "display"); };
+$("#net").onclick = () => { os.call("system.quick"); os.apps.launch("settings", "about"); };
+$("#set").onclick = () => { os.call("system.quick"); os.apps.launch("settings"); };
+$("#off").onclick = () => os.system.shutdown();
+$("#lock").onclick = () => os.system.reboot();
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") os.call("system.quick"); });
+document.addEventListener("contextmenu", (e) => e.preventDefault());
+os.on("settings", show);
+os.on("quick-open", refresh);
+os.settings.get().then(show);
+refresh();
+</script>
+</body>
+</html>

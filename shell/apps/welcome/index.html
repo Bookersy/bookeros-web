@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Welcome</title>
+<link rel="stylesheet" href="../../ui/app.css">
+<style>
+  body { display: flex; flex-direction: column; padding: 32px 40px; gap: 16px; overflow: auto; }
+  h1 { font-weight: 400; font-size: 30px; margin: 0; }
+  .lead { color: var(--muted); margin: 0; font-size: 15px; }
+  .tips { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .tip { background: var(--bg2); border-radius: 18px; padding: 14px 16px; display: flex; gap: 12px; }
+  .tip div:first-child { font-size: 22px; }
+  .tip b { font-weight: 500; display: block; margin-bottom: 2px; }
+  .tip span { color: var(--muted); font-size: 13px; }
+  .foot { display: flex; gap: 8px; justify-content: flex-end; margin-top: auto; }
+</style>
+</head>
+<body>
+<div style="font-size:44px">👋</div>
+<h1>Welcome to BookerOS Web</h1>
+<p class="lead">An operating system where every app is a web app. Here's how to get around.</p>
+<div class="tips">
+  <div class="tip"><div>⭕</div><div><b>Launcher</b><span>Click the circle at the bottom-left, or tap the Windows key, to search apps and the web.</span></div></div>
+  <div class="tip"><div>📌</div><div><b>Shelf</b><span>Pinned apps sit at the bottom. Right-click an icon to unpin it; pin more from the launcher.</span></div></div>
+  <div class="tip"><div>🛍️</div><div><b>App Store</b><span>Turn any website into an app with its own window, icon and name. Firefox is your full browser.</span></div></div>
+  <div class="tip"><div>🕘</div><div><b>Quick Settings</b><span>Click the clock at the bottom-right for dark theme, accent colour, network and power.</span></div></div>
+  <div class="tip"><div>📁</div><div><b>Your files</b><span>Notes, Paint and Files save into your Documents folder.</span></div></div>
+  <div class="tip"><div>⌨️</div><div><b>Shortcuts</b><span>Alt+Tab switch · Ctrl+W close · Win+↑ maximise · F11 full screen (Esc to leave).</span></div></div>
+</div>
+<div class="foot">
+  <button class="ghost" onclick="os.apps.launch('store')">Open App Store</button>
+  <button class="primary" id="done">Get started</button>
+</div>
+<script>
+document.getElementById("done").onclick = () => { os.storage.set("welcome.seen", true); os.app.close(); };
+</script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "id": "wikipedia",
+  "name": "Wikipedia",
+  "icon": "📚",
+  "color": "#5f6670",
+  "url": "https://en.wikipedia.org",
+  "category": "web",
+  "width": 1100,
+  "height": 740,
+  "description": "The free encyclopedia",
+  "autoName": true
+}

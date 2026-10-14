@@ -1,0 +1,12 @@
+{
+  "id": "welcome",
+  "name": "Welcome",
+  "icon": "👋",
+  "color": "#7c9cff",
+  "url": "index.html",
+  "category": "system",
+  "width": 720,
+  "height": 640,
+  "single": true,
+  "description": "Tour of BookerOS Web"
+}

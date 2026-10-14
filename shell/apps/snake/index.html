@@ -1,0 +1,66 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Snake</title>
+<link rel="stylesheet" href="../../ui/app.css">
+<style>
+  body { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: var(--bg2); }
+  .bar { display: flex; gap: 24px; font-size: 15px; }
+  .bar b { font-weight: 500; }
+  canvas { border-radius: 18px; box-shadow: var(--shadow); }
+  .hint { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="bar"><span>Score <b id="score">0</b></span><span>Best <b id="best">0</b></span></div>
+<canvas id="c" width="440" height="440"></canvas>
+<div class="hint" id="hint">Arrow keys or WASD to move · Space to pause</div>
+<script>
+const c = document.getElementById("c"), x = c.getContext("2d"), N = 20, S = c.width / N;
+let snake, dir, next, food, score, best = 0, over, paused, timer;
+os.storage.get("snake.best").then((b) => { best = b || 0; document.getElementById("best").textContent = best; });
+function reset() {
+  snake = [[9, 10], [8, 10], [7, 10]]; dir = next = [1, 0]; score = 0; over = false; paused = true;
+  place(); document.getElementById("score").textContent = 0;
+  clearInterval(timer); timer = setInterval(step, 110); draw();
+}
+function place() { do food = [Math.floor(Math.random() * N), Math.floor(Math.random() * N)]; while (snake.some((p) => p[0] === food[0] && p[1] === food[1])); }
+function step() {
+  if (over || paused) return;
+  dir = next;
+  const h = [snake[0][0] + dir[0], snake[0][1] + dir[1]];
+  if (h[0] < 0 || h[1] < 0 || h[0] >= N || h[1] >= N || snake.some((p) => p[0] === h[0] && p[1] === h[1])) {
+    over = true;
+    if (score > best) { best = score; os.storage.set("snake.best", best); document.getElementById("best").textContent = best; }
+    draw(); return;
+  }
+  snake.unshift(h);
+  if (h[0] === food[0] && h[1] === food[1]) { score++; document.getElementById("score").textContent = score; place(); } else snake.pop();
+  draw();
+}
+function draw() {
+  const dark = document.documentElement.dataset.theme === "dark";
+  x.fillStyle = dark ? "#1f2a1f" : "#e8f5e9"; x.fillRect(0, 0, c.width, c.height);
+  x.fillStyle = dark ? "#243024" : "#dcefdd";
+  for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) if ((i + j) % 2) x.fillRect(i * S, j * S, S, S);
+  x.fillStyle = "#e53935"; x.beginPath(); x.arc(food[0] * S + S / 2, food[1] * S + S / 2, S / 2.4, 0, 7); x.fill();
+  snake.forEach((p, i) => { x.fillStyle = i ? "#43a047" : "#2e7d32"; x.beginPath(); x.roundRect(p[0] * S + 1, p[1] * S + 1, S - 2, S - 2, 6); x.fill(); });
+  if (over || paused) {
+    x.fillStyle = "rgba(0,0,0,.45)"; x.fillRect(0, 0, c.width, c.height);
+    x.fillStyle = "#fff"; x.textAlign = "center"; x.font = "500 28px Roboto, sans-serif";
+    x.fillText(over ? "Game over" : score ? "Paused" : "Snake", c.width / 2, c.height / 2 - 6);
+    x.font = "15px Roboto, sans-serif"; x.fillText(over ? "Press Space to play again" : score ? "Press Space to continue" : "Press Space or an arrow key to start", c.width / 2, c.height / 2 + 24);
+  }
+}
+document.addEventListener("keydown", (e) => {
+  const k = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0], w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0] }[e.key];
+  if (k && !(k[0] === -dir[0] && k[1] === -dir[1])) { next = k; e.preventDefault(); if (paused && !over) { paused = false; } }
+  if (e.key === " ") { e.preventDefault(); over ? reset() : (paused = !paused, draw()); }
+});
+reset();
+os.on("settings", () => setTimeout(draw, 50));
+setTimeout(draw, 300);
+</script>
+</body>
+</html>

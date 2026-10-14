@@ -1,0 +1,12 @@
+{
+  "id": "store",
+  "name": "App Store",
+  "icon": "🛍️",
+  "color": "#7a5af5",
+  "url": "index.html",
+  "category": "system",
+  "width": 920,
+  "height": 640,
+  "single": true,
+  "description": "Add any website as an app"
+}

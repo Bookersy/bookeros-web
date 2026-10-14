@@ -1,0 +1,122 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>App Store</title>
+<link rel="stylesheet" href="../../ui/app.css">
+<style>
+  body { overflow: auto; background: var(--bg); }
+  .hero { margin: 20px 28px; padding: 24px 28px; border-radius: 24px; background: var(--accent-soft); display: flex; gap: 24px; align-items: center; }
+  .hero h1 { margin: 0 0 6px; font-weight: 400; font-size: 26px; }
+  .hero p { margin: 0; color: var(--muted); }
+  form { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  form input { background: var(--bg) !important; min-width: 0; }
+  #msg { margin-top: 8px; font-size: 13px; min-height: 18px; color: var(--muted); }
+  #msg.bad { color: var(--danger); }
+  h2 { font-weight: 500; font-size: 16px; margin: 22px 28px 10px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 10px; padding: 0 28px 28px; }
+  .card { display: flex; gap: 14px; align-items: center; background: var(--bg2); border-radius: 18px; padding: 12px 14px; min-width: 0; }
+  .ic { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-size: 22px; flex: none; overflow: hidden; }
+  .ic.has-img { box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+  .meta { flex: 1; min-width: 0; }
+  .meta b, .meta small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .meta b { font-weight: 500; }
+  .meta small { color: var(--muted); }
+  .btns { display: flex; gap: 4px; flex: none; }
+  .card button { padding: 6px 14px; white-space: nowrap; }
+  .empty { color: var(--muted); padding: 4px 28px 28px; }
+  .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: s .8s linear infinite; vertical-align: -1px; margin-right: 6px; }
+  @keyframes s { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div style="font-size:54px">🛍️</div>
+  <div style="flex:1;min-width:0">
+    <h1>Every website can be an app</h1>
+    <p>Install any web address and it gets its own window, the site's icon and its name, just like a browser tab.</p>
+    <form id="f">
+      <input id="url" placeholder="Web address, e.g. youtube.com" style="flex:2;min-width:220px" required autofocus>
+      <input id="name" placeholder="Name (optional)" style="flex:1;min-width:140px">
+      <button class="primary" id="go">Install</button>
+    </form>
+    <div id="msg"></div>
+  </div>
+</div>
+<h2>Installed web apps</h2>
+<div class="grid" id="mine"></div>
+<h2>Popular web apps</h2>
+<div class="grid" id="cat"></div>
+<div class="toast" id="toast"></div>
+<script>
+const $ = (s) => document.querySelector(s);
+const CATALOG = [
+  ["YouTube", "https://www.youtube.com", "▶️", "#cc0000", "Videos"],
+  ["BBC News", "https://www.bbc.co.uk/news", "📰", "#bb1919", "UK and world news"],
+  ["Gmail", "https://mail.google.com", "✉️", "#c5221f", "Google mail"],
+  ["Google Docs", "https://docs.google.com", "📄", "#1a73e8", "Documents"],
+  ["Spotify", "https://open.spotify.com", "🎵", "#1db954", "Music"],
+  ["Desmos", "https://www.desmos.com/calculator", "📈", "#2f7d32", "Graphing calculator"],
+  ["Photopea", "https://www.photopea.com", "🖼️", "#18a497", "Photo editor"],
+  ["GitHub", "https://github.com", "🐙", "#24292f", "Code hosting"],
+  ["Hacker News", "https://news.ycombinator.com", "🟧", "#ff6600", "Tech news"],
+  ["Met Office", "https://www.metoffice.gov.uk", "⛅", "#2b6cb0", "UK weather forecasts"],
+  ["Lichess", "https://lichess.org", "♟️", "#5d4037", "Play chess online"],
+  ["Duolingo", "https://www.duolingo.com", "🦉", "#58cc02", "Learn a language"],
+  ["Claude", "https://claude.ai", "✳️", "#d97757", "AI assistant"],
+];
+const norm = (u) => u.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "");
+const busy = new Set();
+function toast(t) { const el = $("#toast"); el.textContent = t; el.classList.add("show"); setTimeout(() => el.classList.remove("show"), 2200); }
+function btn(label, cls, fn) { const b = document.createElement("button"); b.innerHTML = label; b.className = cls; b.onclick = fn; return b; }
+function card(app, sub, buttons) {
+  const c = document.createElement("div"); c.className = "card";
+  c.innerHTML = os.tile(app, "ic") + `<div class="meta"><b></b><small></small></div><div class="btns"></div>`;
+  c.querySelector("b").textContent = app.name; c.querySelector("small").textContent = sub;
+  buttons.forEach((b) => c.querySelector(".btns").appendChild(b)); return c;
+}
+async function install(spec, key) {
+  busy.add(key); render();
+  try {
+    const r = await os.apps.install(spec);
+    toast(`${r.name} installed` + (r.iconFound ? "" : " (couldn't find a site icon)"));
+    return r;
+  } catch (e) { toast("Couldn't install: " + e.message.replace(/^Error:\s*/, "")); }
+  finally { busy.delete(key); render(); }
+}
+async function render() {
+  const apps = await os.apps.list();
+  const web = apps.filter((a) => /^https?:/.test(a.url) && !a.native && a.id !== "browser");
+  $("#mine").innerHTML = "";
+  web.forEach((a) => {
+    const b = [btn("Open", "ghost", () => os.apps.launch(a.id))];
+    if (!a.system) b.push(btn("Remove", "ghost danger", async () => { await os.apps.uninstall(a.id); toast(a.name + " removed"); render(); }));
+    $("#mine").appendChild(card(a, norm(a.url), b));
+  });
+  $("#cat").innerHTML = "";
+  CATALOG.forEach(([n, u, i, c, d]) => {
+    const have = web.find((a) => norm(a.url) === norm(u));
+    if (have) return;
+    const key = norm(u);
+    $("#cat").appendChild(card({ name: n, icon: i, color: c }, d, [busy.has(key)
+      ? btn(`<span class="spin"></span>Installing`, "tonal", () => {})
+      : btn("Install", "tonal", () => install({ url: u, fallbackName: n, color: c, icon: i, description: d }, key))]));
+  });
+}
+$("#f").onsubmit = async (e) => {
+  e.preventDefault();
+  const url = $("#url").value.trim(), name = $("#name").value.trim();
+  if (!url) return;
+  $("#go").disabled = true; $("#msg").className = ""; $("#msg").innerHTML = `<span class="spin"></span>Fetching the site's name and icon…`;
+  try {
+    const r = await os.apps.install({ url, name });
+    $("#msg").textContent = `Installed “${r.name}”` + (r.iconFound ? "" : " — the site didn't provide an icon, so it uses 🌐") + ". It's in the launcher.";
+    $("#f").reset(); render(); os.apps.launch(r.id);
+  } catch (err) { $("#msg").className = "bad"; $("#msg").textContent = err.message.replace(/^Error:\s*/, ""); }
+  $("#go").disabled = false;
+};
+os.on("apps", render);
+render();
+</script>
+</body>
+</html>

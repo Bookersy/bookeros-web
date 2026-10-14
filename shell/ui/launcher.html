@@ -1,0 +1,123 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Launcher</title>
+<link rel="stylesheet" href="app.css">
+<style>
+  html, body { background: transparent; overflow: hidden; }
+  .bubble {
+    position: fixed; inset: 10px; background: var(--bg); border-radius: 24px; box-shadow: 0 6px 24px rgba(0,0,0,.28);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  header { padding: 16px 16px 8px; }
+  .search { display: flex; align-items: center; gap: 10px; background: var(--bg2); border-radius: 24px; padding: 0 16px; }
+  .search svg { width: 20px; height: 20px; fill: var(--muted); flex: none; }
+  #q { flex: 1; border: 0; background: transparent; padding: 12px 0; font-size: 15px; }
+  #q:focus { border: 0; }
+  #recent { display: flex; gap: 8px; padding: 8px 20px 0; flex-wrap: wrap; }
+  .chip { display: flex; align-items: center; gap: 8px; background: var(--bg2); border-radius: 18px; padding: 6px 14px 6px 6px; cursor: pointer; font-size: 13px; }
+  .chip:hover { background: var(--bg3); }
+  .chip .b { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; overflow: hidden; }
+  .chip span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 12px 16px 4px; }
+  #grid {
+    flex: 1; overflow: auto; padding: 4px 12px 16px;
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; align-content: start;
+  }
+  .app { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 4px 10px; border-radius: 16px; cursor: pointer; text-align: center; position: relative; }
+  .app:hover, .app.kb { background: var(--bg2); }
+  .tile { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; font-size: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+  .app span { font-size: 12.5px; color: var(--text); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile.has-img, .chip .b.has-img { box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+  .pin { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%; display: none; place-items: center; font-size: 12px; background: var(--bg3); }
+  .app:hover .pin { display: grid; }
+  .pin.on { background: var(--accent-soft); }
+  .empty { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 30px; }
+  .web { grid-column: 1 / -1; }
+</style>
+</head>
+<body>
+<div class="bubble">
+  <header>
+    <div class="search">
+      <svg viewBox="0 0 24 24"><path d="M15.5 14h-.8l-.3-.3A6.5 6.5 0 1 0 14 15.5l.3.3v.8l5 5 1.5-1.5-5-5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"/></svg>
+      <input id="q" placeholder="Search your apps and the web…" autocomplete="off">
+    </div>
+  </header>
+  <div id="recent"></div>
+  <hr>
+  <div id="grid"></div>
+</div>
+<script>
+const $ = (s) => document.querySelector(s);
+let apps = [], shown = [], kb = 0, pinned = [], recent = [];
+function render() {
+  const q = $("#q").value.trim().toLowerCase();
+  shown = apps.filter((a) => !q || a.name.toLowerCase().includes(q) || (a.description || "").toLowerCase().includes(q));
+  $("#recent").style.display = q ? "none" : "flex";
+  $("#recent").innerHTML = "";
+  recent.map((id) => apps.find((a) => a.id === id)).filter(Boolean).slice(0, 4).forEach((a) => {
+    const c = document.createElement("div");
+    c.className = "chip";
+    c.innerHTML = os.tile(a, "b") + `<span></span>`;
+    c.querySelector("span").textContent = a.name;
+    c.onclick = () => go(a.id);
+    $("#recent").appendChild(c);
+  });
+  const g = $("#grid");
+  g.innerHTML = "";
+  shown.forEach((a, i) => {
+    const el = document.createElement("div");
+    el.className = "app" + (q && i === kb ? " kb" : "");
+    const on = pinned.includes(a.id);
+    el.innerHTML = `<div class="pin ${on ? "on" : ""}" title="${on ? "Unpin from shelf" : "Pin to shelf"}">📌</div>
+      ${os.tile(a, "tile")}<span></span>`;
+    el.querySelector("span").textContent = a.name;
+    el.title = a.description || "";
+    el.onclick = (e) => {
+      if (e.target.closest(".pin")) { os.call("shelf.togglePin", a.id); return; }
+      go(a.id);
+    };
+    g.appendChild(el);
+  });
+  if (q) {
+    const w = document.createElement("div");
+    w.className = "app web" + (shown.length === 0 ? " kb" : "");
+    w.style.flexDirection = "row"; w.style.justifyContent = "flex-start"; w.style.padding = "12px 16px";
+    w.innerHTML = `<div class="tile" style="width:32px;height:32px;font-size:16px;background:#2f8f83">🔎</div><span></span>`;
+    w.querySelector("span").textContent = `Search the web for “${$("#q").value.trim()}”`;
+    w.onclick = webSearch;
+    g.appendChild(w);
+  }
+}
+function webSearch() {
+  const t = $("#q").value.trim();
+  $("#q").value = "";
+  os.call("browser.open", /^[^\s]+\.[^\s]+$/.test(t) && !/\s/.test(t) ? (/^https?:/.test(t) ? t : "https://" + t)
+                                  : "https://duckduckgo.com/?q=" + encodeURIComponent(t));
+}
+function go(id) {
+  recent = [id, ...recent.filter((x) => x !== id)].slice(0, 6);
+  os.storage.set("launcher.recent", recent);
+  $("#q").value = "";
+  render();
+  os.apps.launch(id);
+}
+$("#q").oninput = () => { kb = 0; render(); };
+$("#q").onkeydown = (e) => {
+  if (e.key === "Enter") { shown[kb] ? go(shown[kb].id) : webSearch(); }
+  if (e.key === "ArrowRight" || e.key === "ArrowDown") { kb = Math.min(kb + 1, shown.length - 1); render(); }
+  if (e.key === "ArrowLeft" || e.key === "ArrowUp") { kb = Math.max(kb - 1, 0); render(); }
+};
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") os.system.launcher(); });
+document.addEventListener("contextmenu", (e) => e.preventDefault());
+os.on("apps", (a) => { apps = a; render(); });
+os.on("settings", (s) => { pinned = s.pinned || []; render(); });
+os.on("launcher-open", () => { $("#q").value = ""; kb = 0; render(); setTimeout(() => $("#q").focus(), 30); });
+Promise.all([os.apps.list(), os.settings.get(), os.storage.get("launcher.recent")]).then(([a, s, r]) => {
+  apps = a; pinned = s.pinned || []; recent = r || []; render();
+});
+</script>
+</body>
+</html>

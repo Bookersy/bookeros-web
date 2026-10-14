@@ -1,0 +1,12 @@
+{
+  "id": "settings",
+  "name": "Settings",
+  "icon": "⚙️",
+  "color": "#5a6378",
+  "url": "index.html",
+  "category": "system",
+  "width": 820,
+  "height": 580,
+  "single": true,
+  "description": "Wallpaper, display, accounts"
+}

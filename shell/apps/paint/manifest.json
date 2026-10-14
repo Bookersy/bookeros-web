@@ -1,0 +1,11 @@
+{
+  "id": "paint",
+  "name": "Paint",
+  "icon": "🎨",
+  "color": "#d6497a",
+  "url": "index.html",
+  "category": "tools",
+  "width": 960,
+  "height": 660,
+  "description": "Draw and save pictures"
+}

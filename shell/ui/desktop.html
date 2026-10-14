@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Desktop</title>
+<link rel="stylesheet" href="app.css">
+<script src="wallpapers.js"></script>
+<style>
+  body { background: #b8dccb; overflow: hidden; }
+  #wall { position: fixed; inset: 0; transition: background .6s; }
+</style>
+</head>
+<body>
+<div id="wall"></div>
+<script>
+function applySettings(s) {
+  const w = WALLPAPERS[s.wallpaper] || WALLPAPERS.meadow;
+  document.getElementById("wall").style.background = w.css;
+}
+document.addEventListener("contextmenu", (e) => { e.preventDefault(); os.apps.launch("settings", "wallpaper"); });
+os.on("settings", applySettings);
+os.settings.get().then(applySettings);
+</script>
+</body>
+</html>

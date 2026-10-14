@@ -1,0 +1,117 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Paint</title>
+<link rel="stylesheet" href="../../ui/app.css">
+<style>
+  body { display: flex; flex-direction: column; height: 100vh; }
+  .tools { display: flex; gap: 2px; }
+  .tools button { width: 38px; height: 38px; padding: 0; border: 0; color: var(--text); font-size: 17px; }
+  .tools button.on { background: var(--accent-soft); }
+  .sw { width: 24px; height: 24px; border-radius: 50%; cursor: pointer; border: 2px solid var(--line); }
+  .sw.on { outline: 2px solid var(--accent); outline-offset: 2px; }
+  #stage { flex: 1; overflow: auto; background: var(--bg2); display: grid; place-items: center; padding: 20px; }
+  canvas { background: #fff; box-shadow: var(--shadow); border-radius: 4px; cursor: crosshair; touch-action: none; }
+  input[type=range] { width: 90px; accent-color: var(--accent); }
+  input[type=color] { width: 30px; height: 30px; border: 0; padding: 0; background: none; cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <div class="tools" id="tools">
+    <button data-t="pen" class="on" title="Brush">🖌️</button>
+    <button data-t="line" title="Line">📏</button>
+    <button data-t="rect" title="Rectangle">⬜</button>
+    <button data-t="ellipse" title="Ellipse">⚪</button>
+    <button data-t="fill" title="Fill">🪣</button>
+    <button data-t="eraser" title="Eraser">🧽</button>
+  </div>
+  <span style="width:10px"></span>
+  <div id="pal" style="display:flex;gap:6px;align-items:center"></div>
+  <input type="color" id="custom" value="#0b57d0" title="Custom colour">
+  <input type="range" id="size" min="1" max="60" value="6" title="Size"><span id="sz" class="muted" style="width:30px">6</span>
+  <div class="spacer"></div>
+  <button class="ghost" id="undo">↶ Undo</button>
+  <button class="ghost" id="clear">Clear</button>
+  <button class="tonal" id="save">Save</button>
+</div>
+<div id="stage"><canvas id="c" width="900" height="560"></canvas></div>
+<div class="toast" id="toast"></div>
+<script>
+const $ = (s) => document.querySelector(s);
+const c = $("#c"), ctx = c.getContext("2d", { willReadFrequently: true });
+let tool = "pen", color = "#1f1f1f", size = 6, drawing = false, sx, sy, snap, undo = [], path = null;
+ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+["#1f1f1f","#ffffff","#d93025","#f29900","#fbbc04","#188038","#1a73e8","#9334e6","#e52592","#795548"].forEach((col, i) => {
+  const s = document.createElement("div"); s.className = "sw" + (i ? "" : " on"); s.style.background = col;
+  s.onclick = () => { color = col; document.querySelectorAll(".sw").forEach((x) => x.classList.remove("on")); s.classList.add("on"); };
+  $("#pal").appendChild(s);
+});
+function toast(t) { const el = $("#toast"); el.textContent = t; el.classList.add("show"); setTimeout(() => el.classList.remove("show"), 1600); }
+$("#custom").oninput = (e) => { color = e.target.value; document.querySelectorAll(".sw").forEach((x) => x.classList.remove("on")); };
+$("#size").oninput = (e) => { size = +e.target.value; $("#sz").textContent = size; };
+document.querySelectorAll("#tools button").forEach((b) => b.onclick = () => {
+  tool = b.dataset.t; document.querySelectorAll("#tools button").forEach((x) => x.classList.remove("on")); b.classList.add("on");
+});
+const pos = (e) => { const r = c.getBoundingClientRect(); return [(e.clientX - r.left) * c.width / r.width, (e.clientY - r.top) * c.height / r.height]; };
+function pushUndo() { undo.push(ctx.getImageData(0, 0, c.width, c.height)); if (undo.length > 30) undo.shift(); }
+function style() { ctx.lineCap = ctx.lineJoin = "round"; ctx.lineWidth = size; ctx.strokeStyle = tool === "eraser" ? "#fff" : color; }
+c.onpointerdown = (e) => {
+  c.setPointerCapture(e.pointerId);
+  [sx, sy] = pos(e); pushUndo();
+  if (tool === "fill") { flood(Math.floor(sx), Math.floor(sy)); return; }
+  drawing = true; snap = ctx.getImageData(0, 0, c.width, c.height);
+  style(); ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + .01, sy); ctx.stroke();
+};
+c.onpointermove = (e) => {
+  if (!drawing) return;
+  const [x, y] = pos(e); style();
+  if (tool === "pen" || tool === "eraser") { ctx.lineTo(x, y); ctx.stroke(); return; }
+  ctx.putImageData(snap, 0, 0); ctx.beginPath();
+  if (tool === "line") { ctx.moveTo(sx, sy); ctx.lineTo(x, y); }
+  if (tool === "rect") ctx.rect(sx, sy, x - sx, y - sy);
+  if (tool === "ellipse") ctx.ellipse((sx + x) / 2, (sy + y) / 2, Math.abs(x - sx) / 2, Math.abs(y - sy) / 2, 0, 0, 7);
+  ctx.stroke();
+};
+c.onpointerup = () => (drawing = false);
+function flood(x, y) {
+  const img = ctx.getImageData(0, 0, c.width, c.height), d = img.data, W = c.width, H = c.height;
+  const i0 = (y * W + x) * 4, t = [d[i0], d[i0 + 1], d[i0 + 2]];
+  const f = parseInt(color.slice(1), 16), fc = [f >> 16, (f >> 8) & 255, f & 255];
+  if (t.every((v, i) => Math.abs(v - fc[i]) < 4)) return;
+  const match = (i) => Math.abs(d[i] - t[0]) < 40 && Math.abs(d[i + 1] - t[1]) < 40 && Math.abs(d[i + 2] - t[2]) < 40;
+  const st = [[x, y]];
+  while (st.length) {
+    let [px, py] = st.pop(); let i = (py * W + px) * 4;
+    while (px >= 0 && match(i)) { px--; i -= 4; }
+    px++; i += 4; let up = false, dn = false;
+    while (px < W && match(i)) {
+      d[i] = fc[0]; d[i + 1] = fc[1]; d[i + 2] = fc[2]; d[i + 3] = 255;
+      if (py > 0) { const m = match(i - W * 4); if (m && !up) st.push([px, py - 1]); up = m; }
+      if (py < H - 1) { const m = match(i + W * 4); if (m && !dn) st.push([px, py + 1]); dn = m; }
+      px++; i += 4;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+$("#undo").onclick = () => { const u = undo.pop(); if (u) ctx.putImageData(u, 0, 0); };
+$("#clear").onclick = () => { pushUndo(); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height); };
+$("#save").onclick = async () => {
+  if (!path) {
+    const n = prompt("Save picture as", "Drawing " + new Date().toLocaleDateString().replace(/\//g, "-") + ".png");
+    if (!n) return; path = "Pictures/" + (n.endsWith(".png") ? n : n + ".png");
+  }
+  await os.fs.writeDataURL(path, c.toDataURL("image/png")); toast("Saved to Documents/" + path); os.app.setTitle("Paint — " + path.split("/").pop());
+};
+document.addEventListener("keydown", (e) => { if (e.ctrlKey && e.key === "z") $("#undo").click(); if (e.ctrlKey && e.key === "s") { e.preventDefault(); $("#save").click(); } });
+async function openPic(p) {
+  const img = new Image();
+  img.onload = () => { c.width = img.width; c.height = img.height; ctx.drawImage(img, 0, 0); path = p; os.app.setTitle("Paint — " + p.split("/").pop()); };
+  img.src = await os.fs.readDataURL(p);
+}
+os.on("open", openPic);
+if (os.arg) openPic(os.arg);
+</script>
+</body>
+</html>

@@ -1,0 +1,65 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Clock</title>
+<link rel="stylesheet" href="../../ui/app.css">
+<style>
+  body { display: flex; flex-direction: column; height: 100vh; }
+  .tabs { display: flex; justify-content: center; gap: 4px; padding: 12px; }
+  .tabs button { border: 0; color: var(--text); }
+  .tabs button.on { background: var(--accent-soft); }
+  .pane { flex: 1; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 18px; }
+  .pane.on { display: flex; }
+  .big { font-size: 64px; font-weight: 300; font-variant-numeric: tabular-nums; letter-spacing: -1px; }
+  .sub { color: var(--muted); }
+  .row { display: flex; gap: 10px; }
+  #laps { max-height: 120px; overflow: auto; color: var(--muted); font-variant-numeric: tabular-nums; text-align: center; }
+  .tin { display: flex; gap: 6px; align-items: center; font-size: 28px; }
+  .tin input { width: 74px; text-align: center; font-size: 28px; }
+</style>
+</head>
+<body>
+<div class="tabs"><button class="on" data-p="now">Clock</button><button data-p="sw">Stopwatch</button><button data-p="tm">Timer</button></div>
+<div class="pane on" id="now"><div class="big" id="clk"></div><div class="sub" id="day"></div></div>
+<div class="pane" id="sw"><div class="big" id="swv">00:00.00</div><div class="row"><button class="primary" id="swgo">Start</button><button class="ghost" id="swlap">Lap</button><button class="ghost" id="swreset">Reset</button></div><div id="laps"></div></div>
+<div class="pane" id="tm">
+  <div class="tin" id="tset"><input id="tmm" value="05" maxlength="2">:<input id="tss" value="00" maxlength="2"></div>
+  <div class="big" id="tmv" style="display:none"></div>
+  <div class="row"><button class="primary" id="tgo">Start</button><button class="ghost" id="treset">Reset</button></div>
+</div>
+<script>
+const $ = (s) => document.querySelector(s);
+document.querySelectorAll(".tabs button").forEach((b) => b.onclick = () => {
+  document.querySelectorAll(".tabs button").forEach((x) => x.classList.toggle("on", x === b));
+  document.querySelectorAll(".pane").forEach((p) => p.classList.toggle("on", p.id === b.dataset.p));
+});
+const pad = (n, w = 2) => String(n).padStart(w, "0");
+setInterval(() => {
+  const n = new Date();
+  $("#clk").textContent = n.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  $("#day").textContent = n.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+}, 250);
+let swStart = 0, swAcc = 0, swRun = false, laps = [];
+const fmt = (ms) => `${pad(Math.floor(ms / 60000))}:${pad(Math.floor(ms / 1000) % 60)}.${pad(Math.floor(ms / 10) % 100)}`;
+const swNow = () => swAcc + (swRun ? Date.now() - swStart : 0);
+setInterval(() => ($("#swv").textContent = fmt(swNow())), 30);
+$("#swgo").onclick = () => { if (swRun) { swAcc += Date.now() - swStart; swRun = false; $("#swgo").textContent = "Start"; } else { swStart = Date.now(); swRun = true; $("#swgo").textContent = "Pause"; } };
+$("#swlap").onclick = () => { if (!swNow()) return; laps.unshift(fmt(swNow())); $("#laps").innerHTML = laps.map((l, i) => `Lap ${laps.length - i} — ${l}`).join("<br>"); };
+$("#swreset").onclick = () => { swAcc = 0; swRun = false; laps = []; $("#laps").innerHTML = ""; $("#swgo").textContent = "Start"; };
+let tEnd = 0, tLeft = 0, tRun = false, tInt;
+function tShow() { const s = Math.ceil(tLeft / 1000); $("#tmv").textContent = `${pad(Math.floor(s / 60))}:${pad(s % 60)}`; }
+$("#tgo").onclick = () => {
+  if (tRun) { tLeft = tEnd - Date.now(); tRun = false; clearInterval(tInt); $("#tgo").textContent = "Resume"; return; }
+  if (!tLeft) tLeft = ((+$("#tmm").value || 0) * 60 + (+$("#tss").value || 0)) * 1000;
+  if (tLeft <= 0) return;
+  tEnd = Date.now() + tLeft; tRun = true; $("#tgo").textContent = "Pause"; $("#tset").style.display = "none"; $("#tmv").style.display = "";
+  tInt = setInterval(() => {
+    tLeft = Math.max(0, tEnd - Date.now()); tShow();
+    if (!tLeft) { clearInterval(tInt); tRun = false; $("#tmv").textContent = "Time's up!"; $("#tgo").textContent = "Start"; os.app.setTitle("⏰ Time's up!"); }
+  }, 100); tShow();
+};
+$("#treset").onclick = () => { clearInterval(tInt); tRun = false; tLeft = 0; $("#tgo").textContent = "Start"; $("#tset").style.display = ""; $("#tmv").style.display = "none"; os.app.setTitle("Clock"); };
+</script>
+</body>
+</html>

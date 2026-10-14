@@ -1,0 +1,30 @@
+{
+  "id": "browser",
+  "name": "Firefox",
+  "icon": "🦊",
+  "color": "#ff7139",
+  "category": "system",
+  "exec": [
+    "firefox"
+  ],
+  "wmclass": [
+    "firefox",
+    "navigator",
+    "firefox-esr"
+  ],
+  "iconCandidates": [
+    "/usr/share/icons/hicolor/128x128/apps/firefox.png",
+    "/usr/lib/firefox/browser/chrome/icons/default/default128.png",
+    "/usr/share/icons/hicolor/64x64/apps/firefox.png"
+  ],
+  "description": "Browse the web",
+  "fallback": {
+    "name": "Browser",
+    "icon": "🌍",
+    "color": "#2f8f83",
+    "url": "https://duckduckgo.com",
+    "browser": true,
+    "width": 1180,
+    "height": 760
+  }
+}

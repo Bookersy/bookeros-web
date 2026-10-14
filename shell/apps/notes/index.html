@@ -1,0 +1,86 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Notes</title>
+<link rel="stylesheet" href="../../ui/app.css">
+<style>
+  body { display: flex; flex-direction: column; height: 100vh; }
+  #name { font-weight: 500; padding: 0 6px; }
+  #dirty { color: var(--muted); font-size: 12px; }
+  textarea {
+    flex: 1; resize: none; border: 0 !important; border-radius: 0 !important; background: var(--bg) !important;
+    padding: 20px 28px !important; font: 15px/1.65 "JetBrains Mono", "DejaVu Sans Mono", monospace; user-select: text;
+  }
+  .status { display: flex; gap: 16px; padding: 4px 14px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); }
+  dialog { border: 0; border-radius: 24px; padding: 20px; background: var(--bg); color: var(--text); box-shadow: var(--shadow); width: 380px; }
+  dialog::backdrop { background: rgba(0,0,0,.3); }
+  dialog .list { max-height: 260px; overflow: auto; margin: 10px 0; }
+  dialog .f { padding: 8px 10px; border-radius: 10px; cursor: pointer; }
+  dialog .f:hover { background: var(--bg2); }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <button class="ghost" id="new">New</button>
+  <button class="ghost" id="open">Open</button>
+  <button class="tonal" id="save">Save</button>
+  <span id="name">Untitled.txt</span><span id="dirty"></span>
+  <div class="spacer"></div>
+  <button class="ghost" id="smaller">A−</button><button class="ghost" id="bigger">A+</button>
+</div>
+<textarea id="ed" spellcheck="false" placeholder="Start typing…"></textarea>
+<div class="status"><span id="pos">Ln 1, Col 1</span><span id="count">0 words</span><span class="spacer"></span><span>Ctrl+S save · Ctrl+O open</span></div>
+<dialog id="dlg"><b>Open a file</b><div class="list" id="files"></div><div style="text-align:right"><button class="ghost" onclick="dlg.close()">Cancel</button></div></dialog>
+<div class="toast" id="toast"></div>
+<script>
+const $ = (s) => document.querySelector(s);
+const ed = $("#ed");
+let path = null, saved = "", size = 15;
+function toast(t) { const el = $("#toast"); el.textContent = t; el.classList.add("show"); setTimeout(() => el.classList.remove("show"), 1600); }
+function stats() {
+  const v = ed.value, before = v.slice(0, ed.selectionStart).split("\n");
+  $("#pos").textContent = `Ln ${before.length}, Col ${before[before.length - 1].length + 1}`;
+  $("#count").textContent = (v.trim() ? v.trim().split(/\s+/).length : 0) + " words";
+  $("#dirty").textContent = v !== saved ? "• edited" : "";
+}
+function setName() { const n = path ? path.split("/").pop() : "Untitled.txt"; $("#name").textContent = n; os.app.setTitle("Notes — " + n); }
+async function openPath(p) { path = p; ed.value = saved = await os.fs.read(p); setName(); stats(); ed.focus(); }
+async function save() {
+  if (!path) { const n = prompt("Save as (in Documents)", "Untitled.txt"); if (!n) return; path = n; }
+  await os.fs.write(path, ed.value); saved = ed.value; setName(); stats(); toast("Saved to Documents/" + path);
+}
+async function showOpen() {
+  const box = $("#files"); box.innerHTML = "";
+  async function walk(dir) {
+    for (const e of await os.fs.list(dir)) {
+      const p = (dir ? dir + "/" : "") + e.name;
+      if (e.dir) await walk(p);
+      else if (!/\.(png|jpe?g|gif|webp)$/i.test(e.name)) {
+        const d = document.createElement("div"); d.className = "f"; d.textContent = "📄 " + p;
+        d.onclick = () => { $("#dlg").close(); openPath(p); }; box.appendChild(d);
+      }
+    }
+  }
+  await walk("");
+  if (!box.children.length) box.innerHTML = `<div class="muted">No text files yet.</div>`;
+  $("#dlg").showModal();
+}
+$("#new").onclick = () => { if (ed.value !== saved && !confirm("Discard unsaved changes?")) return; path = null; ed.value = saved = ""; setName(); stats(); };
+$("#open").onclick = showOpen;
+$("#save").onclick = save;
+$("#bigger").onclick = () => { size = Math.min(28, size + 1); ed.style.fontSize = size + "px"; };
+$("#smaller").onclick = () => { size = Math.max(10, size - 1); ed.style.fontSize = size + "px"; };
+ed.addEventListener("input", stats); ed.addEventListener("click", stats); ed.addEventListener("keyup", stats);
+ed.addEventListener("keydown", (e) => {
+  if (e.key === "Tab") { e.preventDefault(); document.execCommand("insertText", false, "    "); }
+});
+document.addEventListener("keydown", (e) => {
+  if (e.ctrlKey && e.key === "s") { e.preventDefault(); save(); }
+  if (e.ctrlKey && e.key === "o") { e.preventDefault(); showOpen(); }
+});
+os.on("open", openPath);
+if (os.arg) openPath(os.arg); else { setName(); ed.focus(); }
+</script>
+</body>
+</html>

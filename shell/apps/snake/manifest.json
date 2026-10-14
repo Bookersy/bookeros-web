@@ -1,0 +1,11 @@
+{
+  "id": "snake",
+  "name": "Snake",
+  "icon": "🐍",
+  "color": "#3c9a4f",
+  "url": "index.html",
+  "category": "games",
+  "width": 520,
+  "height": 600,
+  "description": "Classic snake game"
+}

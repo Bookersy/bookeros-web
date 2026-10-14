@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Terminal</title>
+<link rel="stylesheet" href="../../ui/app.css">
+<style>
+  body { background: #202124; color: #e8eaed; font: 14px/1.5 "JetBrains Mono", "DejaVu Sans Mono", monospace; padding: 12px 14px; overflow-y: auto; user-select: text; }
+  pre { margin: 0; white-space: pre-wrap; word-break: break-all; font: inherit; }
+  .p { color: #8ab4f8; } .u { color: #81c995; } .err { color: #f28b82; } .dim { color: #9aa0a6; }
+  .line { display: flex; }
+  #in { flex: 1; background: transparent; border: 0; outline: 0; color: inherit; font: inherit; padding: 0; margin-left: 8px; }
+</style>
+</head>
+<body>
+<pre id="log"></pre>
+<div class="line"><span id="ps"></span><input id="in" autocomplete="off" spellcheck="false" autofocus></div>
+<script>
+const $ = (s) => document.querySelector(s);
+let cwd = "", hist = [], hi = 0, user = "booker", host = "bookeros";
+const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+function ps() { return `<span class="u">${user}@${host}</span>:<span class="p">~/Documents${cwd ? "/" + esc(cwd) : ""}</span>$`; }
+function print(html) { $("#log").insertAdjacentHTML("beforeend", html); window.scrollTo(0, document.body.scrollHeight); }
+function render() { $("#ps").innerHTML = ps(); }
+async function run(cmd) {
+  print(ps() + " " + esc(cmd) + "\n");
+  const t = cmd.trim();
+  if (!t) return;
+  if (t === "clear") { $("#log").innerHTML = ""; return; }
+  if (t === "exit") return os.app.close();
+  if (t === "help") {
+    print(`<span class="dim">This terminal runs real shell commands (bash) on BookerOS.
+Commands run one at a time and must finish on their own (no interactive programs).
+Built-ins: cd, clear, exit, open FILE (opens in the matching app), apps, help.
+Try: ls -la · uname -a · free -h · ip addr · cat /etc/os-release</span>\n`); return;
+  }
+  if (t === "apps") { (await os.apps.list()).forEach((a) => print(`${a.icon}  ${esc(a.id.padEnd(14))} ${esc(a.name)}\n`)); return; }
+  if (/^open\s+/.test(t)) {
+    const f = t.slice(5).trim(), p = (cwd ? cwd + "/" : "") + f;
+    os.apps.launch(/\.png$/i.test(f) ? "paint" : "notes", p); return;
+  }
+  if (/^cd(\s|$)/.test(t)) {
+    let target = t.slice(2).trim();
+    if (!target || target === "~") { cwd = ""; render(); return; }
+    const parts = (target.startsWith("/") ? [] : cwd.split("/").filter(Boolean));
+    target.split("/").forEach((p) => { if (p === "..") parts.pop(); else if (p && p !== ".") parts.push(p); });
+    const next = parts.join("/");
+    try { await os.fs.list(next); cwd = next; render(); }
+    catch { print(`<span class="err">cd: ${esc(target)}: no such directory inside Documents</span>\n`); }
+    return;
+  }
+  $("#in").disabled = true;
+  try {
+    const r = await os.system.exec(t, cwd);
+    if (r.out) print((r.code ? `<span class="err">` : "") + esc(r.out) + (r.code ? "</span>" : "") + (r.out.endsWith("\n") ? "" : "\n"));
+  } catch (e) { print(`<span class="err">${esc(e.message)}</span>\n`); }
+  $("#in").disabled = false; $("#in").focus();
+}
+$("#in").onkeydown = (e) => {
+  if (e.key === "Enter") { const v = e.target.value; e.target.value = ""; if (v.trim()) hist.push(v); hi = hist.length; run(v); }
+  if (e.key === "ArrowUp") { e.preventDefault(); if (hi > 0) e.target.value = hist[--hi]; }
+  if (e.key === "ArrowDown") { e.preventDefault(); hi = Math.min(hist.length, hi + 1); e.target.value = hist[hi] || ""; }
+  if (e.ctrlKey && e.key === "l") { e.preventDefault(); $("#log").innerHTML = ""; }
+};
+document.body.onclick = () => { if (!getSelection().toString()) $("#in").focus(); };
+os.settings.get().then((s) => { user = s.username; host = s.hostname || host; render(); });
+print(`<span class="dim">BookerOS Web terminal — type 'help' for tips.</span>\n`);
+render();
+</script>
+</body>
+</html>
