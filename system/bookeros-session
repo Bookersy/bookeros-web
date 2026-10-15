@@ -16,9 +16,13 @@ if ! grep -q '"resolution": "[0-9]' "$HOME/.local/share/bookeros/settings.json" 
 fi
 if [ "$(cat /etc/bookeros-edition 2>/dev/null)" = glass ]; then
   xsetroot -solid '#2b2350'
-  xcompmgr -c -C -r 18 -o .35 -l -20 -t -14 &    # larger, softer window shadows
+fi
+# compositor: window shadows and fades. picom repaints cleanly while windows are dragged
+# (xcompmgr left a smeared trail of old shadows behind moving windows)
+if command -v picom >/dev/null; then
+  picom --config /etc/xdg/bookeros-picom.conf &
 else
-  xcompmgr -c -C -r 12 -o .30 -l -14 -t -10 &
+  xcompmgr -C &   # fallback without shadows, which avoids the trail
 fi
 # tapping the Windows/Super key on its own opens the launcher (Openbox maps Super+Space to it)
 command -v xcape >/dev/null && xcape -e 'Super_L=Super_L|space;Super_R=Super_R|space' &

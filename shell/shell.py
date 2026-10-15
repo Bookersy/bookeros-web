@@ -677,12 +677,15 @@ class Shell:
             headerbar:backdrop:hover button.titlebutton.close {{ background: #ff5f57; }}
             headerbar:backdrop:hover button.titlebutton.minimize {{ background: #febc2e; }}
             headerbar:backdrop:hover button.titlebutton.maximize {{ background: #28c840; }}
-            /* a thin invisible margin round each window works as its resize border */
-            decoration, decoration:backdrop {{
+            /* GTK draws the soft, rounded window shadow itself (the compositor skips these windows) */
+            decoration {{
                 border-radius: 14px 14px 0 0; border: none; margin: 5px;
-                box-shadow: 0 0 0 1px {edge}; }}
+                box-shadow: 0 14px 34px rgba(0,0,0,.34), 0 2px 8px rgba(0,0,0,.18), 0 0 0 1px {edge}; }}
+            decoration:backdrop {{
+                border-radius: 14px 14px 0 0; border: none; margin: 5px;
+                box-shadow: 0 8px 22px rgba(0,0,0,.22), 0 0 0 1px {edge}; }}
             window.maximized decoration, window.fullscreen decoration, window.tiled decoration {{
-                margin: 0; border-radius: 0; }}
+                margin: 0; border-radius: 0; box-shadow: none; }}
             window.maximized headerbar, window.fullscreen headerbar, window.tiled headerbar {{ border-radius: 0; }}
             window.csd, window.csd:backdrop {{ background-color: transparent; }}
             window.solid-csd decoration, window.solid-csd decoration:backdrop {{

@@ -17,7 +17,7 @@ esac
 OUT="${OUT:-$WORK/bookeros-$EDITION.iso}"
 PACKAGES="linux-image-virtual casper initramfs-tools systemd-sysv systemd-resolved libpam-systemd dbus udev kmod sudo
   iproute2 iputils-ping ca-certificates locales tzdata less nano procps
-  xserver-xorg-core xserver-xorg-input-libinput xserver-xorg-video-fbdev xserver-xorg-video-vesa xserver-xorg-legacy xinit x11-xserver-utils x11-utils openbox xcompmgr xcape xdotool
+  xserver-xorg-core xserver-xorg-input-libinput xserver-xorg-video-fbdev xserver-xorg-video-vesa xserver-xorg-legacy xinit x11-xserver-utils x11-utils openbox picom xcompmgr xcape xdotool
   python3 python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 gir1.2-wnck-3.0 libwebkit2gtk-4.1-0 glib-networking
   gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav
   adwaita-icon-theme-full librsvg2-common libgl1-mesa-dri
@@ -86,6 +86,7 @@ find "$R/opt/bookeros" -name '__pycache__' -prune -exec rm -rf {} +
 install -m 755 "$SRC/system/bookeros-session" "$R/usr/local/bin/bookeros-session"
 echo "$EDITION" > "$R/etc/bookeros-edition"
 install -m 644 "$SRC/system/openbox-rc.xml" "$R/etc/xdg/openbox/bookeros-rc.xml"
+install -m 644 "$SRC/system/picom.conf" "$R/etc/xdg/bookeros-picom.conf"
 
 # start X on tty1 after automatic login
 cat > "$R/etc/skel/.bash_profile" <<'EOF'
