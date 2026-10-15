@@ -425,6 +425,7 @@ class Shell:
         self.windows = {}
         self.next_win = 1
         self.ui_views = []           # desktop, panel, launcher
+        self.popup_closed_at = {}
 
         data_dir = os.path.join(DATA, "webdata")
         cache_dir = os.path.join(HOME, ".cache", "bookeros")
@@ -529,11 +530,16 @@ class Shell:
         win = self.make_ui_window(page, Gdk.WindowTypeHint.DOCK, show=False)
         win.set_accept_focus(True)
         win.set_keep_above(True)
-        win.connect("focus-out-event", lambda *a: self.close_popups())
+        win.connect("focus-out-event", lambda *a: self.close_popups(by_focus=True))
         return win
 
-    def close_popups(self):
-        for w in (self.launcher, self.quick):
+    def close_popups(self, by_focus=False):
+        for name, w in (("launcher", self.launcher), ("quick", self.quick)):
+            if w.get_visible() and by_focus:
+                # Pressing the Windows key (or clicking the shelf button) takes focus away
+                # just before the "toggle" arrives; remember this so the toggle closes it
+                # instead of opening it again.
+                self.popup_closed_at[name] = time.monotonic()
             w.hide()
         self.emit_to(self.panel.view, "popup", None)
 
@@ -641,10 +647,14 @@ class Shell:
         if win.get_visible():
             self.close_popups()
             return True
+        if time.monotonic() - self.popup_closed_at.get(which, 0) < 0.6:
+            self.popup_closed_at[which] = 0
+            return True
         self.close_popups()
         self.layout()
         win.show_all()
-        win.present()
+        win.present_with_time(Gdk.CURRENT_TIME)
+        win.view.grab_focus()
         self.emit_to(win.view, which + "-open", None)
         self.emit_to(self.panel.view, "popup", which)
         return True

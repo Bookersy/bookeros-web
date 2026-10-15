@@ -110,11 +110,23 @@ $("#q").onkeydown = (e) => {
   if (e.key === "ArrowRight" || e.key === "ArrowDown") { kb = Math.min(kb + 1, shown.length - 1); render(); }
   if (e.key === "ArrowLeft" || e.key === "ArrowUp") { kb = Math.max(kb - 1, 0); render(); }
 };
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") os.system.launcher(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); os.system.launcher(); } });
 document.addEventListener("contextmenu", (e) => e.preventDefault());
 os.on("apps", (a) => { apps = a; render(); });
 os.on("settings", (s) => { pinned = s.pinned || []; render(); });
-os.on("launcher-open", () => { $("#q").value = ""; kb = 0; render(); setTimeout(() => $("#q").focus(), 30); });
+os.on("launcher-open", () => { $("#q").value = ""; kb = 0; render(); $("#q").focus(); setTimeout(() => $("#q").focus(), 30); });
+// If a key arrives before the search box has focus, send it there instead of losing it
+document.addEventListener("keydown", (e) => {
+  if (document.activeElement === $("#q") || e.ctrlKey || e.altKey || e.metaKey) return;
+  if (e.key.length === 1) {
+    e.preventDefault();
+    $("#q").focus();
+    $("#q").value += e.key;
+    kb = 0; render();
+  } else if (e.key === "Backspace") {
+    $("#q").focus();
+  }
+}, true);
 Promise.all([os.apps.list(), os.settings.get(), os.storage.get("launcher.recent")]).then(([a, s, r]) => {
   apps = a; pinned = s.pinned || []; recent = r || []; render();
 });
