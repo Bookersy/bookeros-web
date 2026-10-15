@@ -7,7 +7,14 @@
 <style>
   body { display: grid; grid-template-columns: 200px 1fr; height: 100vh; }
   nav { background: var(--bg); padding: 12px 8px; border-right: 1px solid var(--line); }
-  nav .item { display: flex; gap: 12px; align-items: center; padding: 9px 14px; border-radius: 0 20px 20px 0; cursor: pointer; margin-left: -8px; padding-left: 22px; }
+  nav .item { display: flex; gap: 14px; align-items: center; padding: 9px 14px; border-radius: 0 20px 20px 0; cursor: pointer; margin-left: -8px; padding-left: 22px; }
+  nav .item svg { color: var(--muted); }
+  nav .item.on svg { color: var(--accent); }
+  svg.i { width: 20px; height: 20px; fill: currentColor; flex: none; display: block; }
+  .toolbar button { display: inline-flex; align-items: center; gap: 6px; }
+  .toolbar button svg.i { width: 18px; height: 18px; }
+  #crumbs svg.i { width: 18px; height: 18px; color: var(--muted); }
+  .ft-dir { color: var(--muted); } .ft-img { color: #d93025; } .ft-txt { color: #1a73e8; } .ft-other { color: var(--muted); }
   nav .item:hover { background: var(--bg2); }
   nav .item.on { background: var(--accent-soft); font-weight: 500; }
   main { display: flex; flex-direction: column; min-width: 0; }
@@ -25,25 +32,25 @@
   tr.row td:last-child { border-radius: 0 10px 10px 0; }
   .nm { display: flex; align-items: center; gap: 10px; }
   .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
-  .empty div { font-size: 46px; }
+  .empty svg.i { width: 64px; height: 64px; margin: 0 auto 10px; color: var(--line); }
   #preview { position: fixed; inset: 0; background: rgba(0,0,0,.75); display: none; place-items: center; }
   #preview img { max-width: 90vw; max-height: 85vh; border-radius: 8px; }
 </style>
 </head>
 <body>
 <nav>
-  <div class="item on" data-p="">📄 My files</div>
-  <div class="item" data-p="Downloads">⬇️ Downloads</div>
-  <div class="item" data-p="Pictures">🖼️ Pictures</div>
+  <div class="item on" data-p=""><i data-icon="laptop"></i>My files</div>
+  <div class="item" data-p="Downloads"><i data-icon="download"></i>Downloads</div>
+  <div class="item" data-p="Pictures"><i data-icon="image"></i>Pictures</div>
 </nav>
 <main>
   <div class="toolbar">
     <div id="crumbs"></div>
     <div class="spacer"></div>
-    <button class="ghost" id="newfile">＋ New file</button>
-    <button class="ghost" id="newdir">＋ New folder</button>
-    <button class="ghost" id="ren" disabled>Rename</button>
-    <button class="ghost danger" id="del" disabled>Delete</button>
+    <button class="ghost" id="newfile" title="New file"><i data-icon="newfile"></i>New file</button>
+    <button class="ghost" id="newdir" title="New folder"><i data-icon="newfolder"></i>New folder</button>
+    <button class="ghost" id="ren" title="Rename" disabled><i data-icon="rename"></i>Rename</button>
+    <button class="ghost danger" id="del" title="Delete" disabled><i data-icon="delete"></i>Delete</button>
   </div>
   <div id="list"></div>
 </main>
@@ -51,9 +58,28 @@
 <div class="toast" id="toast"></div>
 <script>
 const $ = (s) => document.querySelector(s);
+/* Material Design icons, drawn as SVG so they never depend on installed fonts */
+const ICONS = {
+  laptop: "M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z",
+  download: "M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z",
+  image: "M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z",
+  folder: "M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z",
+  folderOpen: "M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z",
+  newfolder: "M20 6h-8l-2-2H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-1 8h-3v3h-2v-3h-3v-2h3V9h2v3h3v2z",
+  newfile: "M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 14h-3v3h-2v-3H8v-2h3v-3h2v3h3v2zm-3-7V3.5L18.5 9H13z",
+  text: "M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z",
+  file: "M6 2c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6H6zm7 7V3.5L18.5 9H13z",
+  rename: "M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z",
+  delete: "M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z",
+  chevron: "M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z",
+};
+const svg = (name, cls = "") => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONS[name]}"/></svg>`;
+document.querySelectorAll("i[data-icon]").forEach((el) => (el.outerHTML = svg(el.dataset.icon)));
 let cwd = "", sel = null;
 const join = (a, b) => (a ? a + "/" : "") + b;
-const iconFor = (e) => e.dir ? "📁" : /\.(png|jpe?g|gif|svg|webp)$/i.test(e.name) ? "🖼️" : /\.(txt|md|log|json|csv|html|js|css|py|sh)$/i.test(e.name) ? "📄" : "📦";
+const iconFor = (e) => e.dir ? svg("folder", "ft-dir")
+  : /\.(png|jpe?g|gif|svg|webp)$/i.test(e.name) ? svg("image", "ft-img")
+  : /\.(txt|md|log|json|csv|html|js|css|py|sh)$/i.test(e.name) ? svg("text", "ft-txt") : svg("file", "ft-other");
 const size = (n) => n < 1024 ? n + " B" : n < 1048576 ? (n / 1024).toFixed(1) + " KB" : (n / 1048576).toFixed(1) + " MB";
 function toast(t) { const el = $("#toast"); el.textContent = t; el.classList.add("show"); setTimeout(() => el.classList.remove("show"), 1800); }
 async function load(p) {
@@ -63,16 +89,16 @@ async function load(p) {
   c.innerHTML = "";
   const parts = p ? p.split("/") : [];
   [["My files", ""], ...parts.map((x, i) => [x, parts.slice(0, i + 1).join("/")])].forEach(([n, path], i) => {
-    if (i) c.append("›");
+    if (i) c.insertAdjacentHTML("beforeend", svg("chevron"));
     const s = document.createElement("span"); s.textContent = n; s.onclick = () => load(path); c.append(s);
   });
   let ents;
   try { ents = await os.fs.list(p); } catch (e) { await os.fs.mkdir(p); ents = []; }
   const list = $("#list");
-  if (!ents.length) { list.innerHTML = `<div class="empty"><div>🗂️</div>This folder is empty</div>`; return; }
+  if (!ents.length) { list.innerHTML = `<div class="empty">${svg("folderOpen")}This folder is empty</div>`; return; }
   let h = `<table><tr><th>Name</th><th style="width:110px">Size</th><th style="width:170px">Modified</th></tr>`;
   ents.forEach((e, i) => {
-    h += `<tr class="row" data-i="${i}"><td><div class="nm">${iconFor(e)} <span></span></div></td>
+    h += `<tr class="row" data-i="${i}"><td><div class="nm">${iconFor(e)}<span></span></div></td>
       <td class="muted">${e.dir ? "—" : size(e.size)}</td>
       <td class="muted">${new Date(e.mtime * 1000).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</td></tr>`;
   });
