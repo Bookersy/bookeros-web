@@ -72,16 +72,28 @@
     .big-ic { display: none; }
     h1 { margin-bottom: 0; }
   }
+  /* Glass edition: a frosted card over the wallpaper */
+  [data-edition=glass] .card {
+    background: rgba(255,255,255,.58); isolation: isolate;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.6), 0 20px 60px rgba(0,0,0,.35);
+  }
+  /* frosted glass: a blurred copy of the wallpaper sits behind the card (works without GPU acceleration) */
+  .card-bg { display: none; position: absolute; z-index: -1; pointer-events: none; filter: blur(28px) saturate(1.6); }
+  .card-tint { display: none; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: rgba(255,255,255,.62); }
+  [data-edition=glass][data-theme=dark] .card-tint { background: rgba(28,28,30,.62); }
+  [data-edition=glass] .card-bg, [data-edition=glass] .card-tint { display: block; }
+  [data-edition=glass][data-theme=dark] .card { background: rgba(30,30,32,.62); box-shadow: inset 0 0 0 1px rgba(255,255,255,.15), 0 20px 60px rgba(0,0,0,.5); }
+  [data-edition=glass] footer button { border-radius: 9px; min-width: 110px; }
   .logo { width: 84px; height: 84px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-size: 40px; font-weight: 700; margin-bottom: 26px; letter-spacing: -2px; }
 </style>
 </head>
 <body>
 <div id="wall"></div>
-<div class="card">
+<div class="card"><div class="card-bg" id="cardbg"></div><div class="card-tint"></div>
   <!-- 0: hello -->
   <section class="step center on" data-step="0">
     <div class="logo">B</div>
-    <h1>Welcome to BookerOS Web</h1>
+    <h1 id="hello">Welcome to BookerOS Web</h1>
     <p class="lead">Let's get your computer set up. This takes about a minute.</p>
   </section>
 
@@ -146,7 +158,8 @@ function show() {
   if (step === STEPS - 1) summary();
 }
 function render() {
-  $("#wall").style.background = (WALLPAPERS[s.wallpaper] || WALLPAPERS.meadow).css;
+  $("#wall").style.background = wallpaperFor(s.wallpaper).css;
+  placeCardBg();
   document.querySelectorAll(".theme").forEach((el) => el.classList.toggle("on", el.dataset.theme === s.theme));
   $("#accs").innerHTML = "";
   Object.entries(s.accents).forEach(([k, v]) => {
@@ -195,11 +208,20 @@ function summary() {
   $("#summary").innerHTML = rows.map(([a, b]) => `<dt>${a}</dt><dd></dd>`).join("");
   $("#summary").querySelectorAll("dd").forEach((dd, i) => (dd.textContent = rows[i][1] || "—"));
 }
+function placeCardBg() {
+  const card = document.querySelector(".card"), bg = $("#cardbg");
+  const r = card.getBoundingClientRect();
+  bg.style.left = -r.left + "px"; bg.style.top = -r.top + "px";
+  bg.style.width = innerWidth + "px"; bg.style.height = innerHeight + "px";
+  bg.style.background = wallpaperFor(s.wallpaper).css;
+}
+addEventListener("resize", placeCardBg);
 $("#next").onclick = next;
 $("#back").onclick = () => { step = Math.max(0, step - 1); show(); };
 document.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.target.closest(".np")) next(); });
 document.addEventListener("contextmenu", (e) => e.preventDefault());
 os.on("settings", (n) => { s = n; render(); });
+if (os.edition === "glass") { document.getElementById("hello").textContent = "Welcome to BookerOS Glass"; document.title = "Set up BookerOS Glass"; }
 os.settings.get().then((n) => {
   s = n; render();
   $("#uname").value = n.username && n.username !== "root" ? n.username[0].toUpperCase() + n.username.slice(1) : "";

@@ -1,0 +1,83 @@
+/* BookerOS Glass — shared "liquid glass" material for the menu bar, dock and popups. */
+:root {
+  --text: #1d1d1f;
+  --muted: rgba(29, 29, 31, .58);
+  --tint: rgba(250, 250, 252, .50);
+  --tint-strong: rgba(246, 246, 248, .80);
+  --edge: rgba(255, 255, 255, .65);
+  --hairline: rgba(0, 0, 0, .12);
+  --hover: rgba(0, 0, 0, .07);
+  --module: rgba(255, 255, 255, .45);
+  --accent: #007aff;
+  --on-accent: #fff;
+  --accent-soft: #d9e9ff;
+  color-scheme: light;
+}
+:root[data-theme=dark] {
+  --text: #f5f5f7;
+  --muted: rgba(245, 245, 247, .6);
+  --tint: rgba(36, 36, 40, .50);
+  --tint-strong: rgba(36, 36, 40, .80);
+  --edge: rgba(255, 255, 255, .22);
+  --hairline: rgba(255, 255, 255, .12);
+  --hover: rgba(255, 255, 255, .10);
+  --module: rgba(255, 255, 255, .10);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; height: 100%; background: transparent; overflow: hidden;
+  font: 13px/1.35 Inter, "DejaVu Sans", sans-serif; color: var(--text);
+  -webkit-font-smoothing: antialiased; user-select: none; cursor: default;
+}
+button { font: inherit; color: inherit; background: none; border: 0; cursor: default; }
+
+/* The glass panel: a blurred copy of what's behind it, a tint, a bright rim and a soft highlight. */
+.glass {
+  position: relative; overflow: hidden; isolation: isolate;
+  background: var(--tint);
+  border-radius: 22px;
+  box-shadow:
+    inset 0 0 0 1px var(--edge),
+    inset 0 1px 1px rgba(255, 255, 255, .55),
+    0 0 0 .5px rgba(0, 0, 0, .22),
+    0 12px 36px rgba(0, 0, 0, .28);
+}
+.glass > .glass-bg {
+  position: absolute; z-index: -2; pointer-events: none;
+  filter: blur(22px) saturate(1.7) brightness(1.04);
+}
+:root[data-theme=dark] .glass > .glass-bg { filter: blur(22px) saturate(1.5) brightness(.8); }
+.glass::after { /* specular sheen */
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; border-radius: inherit;
+  background:
+    radial-gradient(120% 60% at 15% 0%, rgba(255, 255, 255, .38), transparent 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, .14), transparent 30%);
+}
+:root[data-theme=dark] .glass::after {
+  background:
+    radial-gradient(120% 60% at 15% 0%, rgba(255, 255, 255, .12), transparent 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, .06), transparent 30%);
+}
+
+/* A rounded "module" inside a glass panel (Control Center tiles, widgets) */
+.module {
+  background: var(--module); border-radius: 18px;
+  box-shadow: inset 0 0 0 .5px var(--hairline), inset 0 1px 0 rgba(255, 255, 255, .25);
+}
+
+/* App icons: rounded squares with a glassy highlight */
+.app-icon {
+  position: relative; display: grid; place-items: center; border-radius: 23%;
+  overflow: hidden; flex: none;
+  box-shadow: inset 0 0 0 .5px rgba(255, 255, 255, .45), 0 1px 2px rgba(0, 0, 0, .25), 0 4px 10px rgba(0, 0, 0, .18);
+}
+.app-icon::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(160deg, rgba(255, 255, 255, .45) 0%, rgba(255, 255, 255, .08) 45%, rgba(0, 0, 0, .10) 100%);
+}
+.app-icon .glyph { position: relative; z-index: 1; line-height: 1; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .2)); }
+.app-icon img { width: 70%; height: 70%; object-fit: contain; position: relative; z-index: 1; }
+.app-icon.has-img { background: #fff !important; }
+
+svg.i { width: 16px; height: 16px; fill: currentColor; display: block; }

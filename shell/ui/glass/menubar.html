@@ -1,0 +1,193 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Menu bar</title>
+<link rel="stylesheet" href="glass.css">
+<script src="../wallpapers.js"></script>
+<script src="glass.js"></script>
+<style>
+  /* The menu bar is see-through; text colour follows the wallpaper */
+  body { color: var(--bar-text); --bar-text: #1d1d1f; --bar-hover: rgba(0,0,0,.10); }
+  body.on-dark { --bar-text: #fff; --bar-hover: rgba(255,255,255,.20); }
+  .bar {
+    position: fixed; inset: 0; display: flex; align-items: center; padding: 0 8px;
+    font-size: 13.5px; font-weight: 500; letter-spacing: -.1px;
+  }
+  body.on-dark .bar { text-shadow: 0 1px 2px rgba(0,0,0,.35); }
+  body.on-dark .bar::before { /* faint shade so white text stays readable */
+    content: ""; position: fixed; inset: 0; z-index: -1;
+    background: linear-gradient(180deg, rgba(0,0,0,.22), rgba(0,0,0,0));
+  }
+  .item {
+    height: 24px; padding: 0 9px; border-radius: 6px; display: flex; align-items: center; gap: 6px;
+    white-space: nowrap;
+  }
+  .item:hover, .item.open { background: var(--bar-hover); }
+  #logo { padding: 0 11px; }
+  #logo svg { filter: drop-shadow(0 1px 1px rgba(0,0,0,.2)); }
+  #app { font-weight: 700; }
+  .left { display: flex; align-items: center; gap: 1px; min-width: 0; overflow: hidden; }
+  .spacer { flex: 1; }
+  .right { display: flex; align-items: center; gap: 1px; }
+  .right svg.i { width: 15px; height: 15px; }
+  #clock { font-variant-numeric: tabular-nums; padding: 0 10px; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <div class="left">
+    <div class="item" id="logo"></div>
+    <div class="item" id="app">Files</div>
+    <div class="item" data-menu="File">File</div>
+    <div class="item" data-menu="Edit">Edit</div>
+    <div class="item" data-menu="View">View</div>
+    <div class="item" data-menu="Window">Window</div>
+    <div class="item" data-menu="Help">Help</div>
+  </div>
+  <div class="spacer"></div>
+  <div class="right">
+    <div class="item" id="wifi"></div>
+    <div class="item" id="search"></div>
+    <div class="item" id="cc"></div>
+    <div class="item" id="clock"></div>
+  </div>
+</div>
+<script>
+const $ = (s) => document.querySelector(s);
+const G = Glass;
+$("#logo").innerHTML = G.LOGO;
+$("#wifi").innerHTML = G.svg(G.ICONS.wifi);
+$("#search").innerHTML = G.svg(G.ICONS.search);
+$("#cc").innerHTML = G.svg(G.ICONS.control);
+
+let apps = [], wins = [], activeApp = null, openKey = null;
+
+function tick() {
+  const n = new Date();
+  const day = n.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+  const time = n.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  $("#clock").textContent = `${day}  ${time}`;
+}
+
+let lastWinId = null;
+function currentApp() {
+  let w = wins.find((x) => x.active) || null;
+  if (w) lastWinId = w.id;
+  // while one of our menus/popups has focus, keep showing the app you were in
+  else if (openKey && lastWinId != null) w = wins.find((x) => x.id === lastWinId) || null;
+  else lastWinId = null;
+  if (!w) return { id: null, name: "Files", win: null };
+  const a = apps.find((x) => x.id === w.appId);
+  return { id: w.appId, name: a ? a.name : w.title, win: w };
+}
+function showApp() {
+  activeApp = currentApp();
+  $("#app").textContent = activeApp.name;
+}
+
+/* Menus. Each item: {label, action, key, sep, disabled} */
+function menuItems(name) {
+  const a = activeApp || currentApp();
+  const hasWin = !!a.win;
+  switch (name) {
+    case "logo":
+      return [
+        { label: "About This Computer", action: "about" },
+        { sep: true },
+        { label: "System Settings…", action: "settings" },
+        { label: "App Store…", action: "launch:store" },
+        { sep: true },
+        { label: "Restart…", action: "restart" },
+        { label: "Shut Down…", action: "shutdown" },
+      ];
+    case "app":
+      return [
+        { label: `About ${a.name}`, action: "about" },
+        { sep: true },
+        { label: "Settings…", action: "settings" },
+        { sep: true },
+        { label: `Quit ${a.name}`, action: a.id ? "quit:" + a.id : "", key: "Win Q", disabled: !a.id },
+      ];
+    case "File":
+      return [
+        { label: "New Window", action: "newwindow" },
+        { sep: true },
+        { label: "Close Window", action: "close", key: "Win W", disabled: !hasWin },
+      ];
+    case "Edit":
+      return [
+        { label: "Undo", action: "key:ctrl+z", key: "Ctrl Z", disabled: !hasWin },
+        { label: "Redo", action: "key:ctrl+shift+z", key: "Ctrl Shift Z", disabled: !hasWin },
+        { sep: true },
+        { label: "Cut", action: "key:ctrl+x", key: "Ctrl X", disabled: !hasWin },
+        { label: "Copy", action: "key:ctrl+c", key: "Ctrl C", disabled: !hasWin },
+        { label: "Paste", action: "key:ctrl+v", key: "Ctrl V", disabled: !hasWin },
+        { label: "Select All", action: "key:ctrl+a", key: "Ctrl A", disabled: !hasWin },
+      ];
+    case "View":
+      return [
+        { label: "Enter Full Screen", action: "fullscreen", key: "F11", disabled: !hasWin },
+        { label: "Reload", action: "key:F5", key: "F5", disabled: !hasWin },
+      ];
+    case "Window": {
+      const list = wins.map((w) => ({ label: (w.active ? "✓ " : "    ") + w.title, action: "focus:" + w.id }));
+      return [
+        { label: "Minimise", action: "minimize", key: "Win M", disabled: !hasWin },
+        { label: "Zoom", action: "zoom", disabled: !hasWin },
+        ...(list.length ? [{ sep: true }, ...list] : []),
+      ];
+    }
+    case "Help":
+      return [{ label: "BookerOS Help", action: "help" }, { label: "Search Apps…", action: "spotlight", key: "Win" }];
+  }
+  return [];
+}
+
+function openMenu(el, name) {
+  const r = el.getBoundingClientRect();
+  const items = menuItems(name);
+  const longest = Math.max(...items.map((i) => (i.label || "").length + (i.key ? i.key.length + 4 : 0)));
+  os.call("menu.open", { owner: name, x: Math.round(r.left), items, width: Math.max(200, Math.min(380, longest * 7.4 + 40)) });
+}
+
+$("#logo").onmousedown = () => openMenu($("#logo"), "logo");
+$("#app").onmousedown = () => openMenu($("#app"), "app");
+document.querySelectorAll("[data-menu]").forEach((el) => (el.onmousedown = () => openMenu(el, el.dataset.menu)));
+$("#search").onmousedown = () => os.call("popup.toggle", "spotlight", null);
+$("#cc").onmousedown = () => os.call("popup.toggle", "control", null);
+$("#clock").onmousedown = () => os.call("popup.toggle", "notify", null);
+$("#wifi").onmousedown = () => os.call("popup.toggle", "control", null);
+
+// While a menu is open, hovering another title switches to it (like a real menu bar)
+document.querySelectorAll(".left .item").forEach((el) => {
+  el.addEventListener("mouseenter", () => {
+    if (!openKey || !openKey.startsWith("menu:")) return;
+    const name = el.id === "logo" ? "logo" : el.id === "app" ? "app" : el.dataset.menu;
+    if ("menu:" + name !== openKey) openMenu(el, name);
+  });
+});
+
+os.on("popup", (key) => {
+  openKey = key;
+  document.querySelectorAll(".item").forEach((el) => el.classList.remove("open"));
+  const map = { "menu:logo": "#logo", "menu:app": "#app", spotlight: "#search", control: "#cc", notify: "#clock" };
+  let el = map[key] && $(map[key]);
+  if (!el && key && key.startsWith("menu:")) el = document.querySelector(`[data-menu="${key.slice(5)}"]`);
+  if (el) el.classList.add("open");
+});
+function applySettings(s) {
+  G.applySettings(s);
+  document.body.classList.toggle("on-dark", !!wallpaperFor(s.wallpaper).dark);
+}
+os.on("windows", (w) => { wins = w; showApp(); });
+os.on("apps", (a) => { apps = a; showApp(); });
+os.on("settings", applySettings);
+Promise.all([os.apps.list(), os.windows.list(), os.settings.get()]).then(([a, w, s]) => {
+  apps = a; wins = w; applySettings(s); showApp();
+});
+document.addEventListener("contextmenu", (e) => e.preventDefault());
+tick(); setInterval(tick, 5000);
+</script>
+</body>
+</html>

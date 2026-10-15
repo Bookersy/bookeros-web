@@ -1,0 +1,76 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Notification Center</title>
+<link rel="stylesheet" href="glass.css">
+<script src="glass.js"></script>
+<style>
+  #nc { position: absolute; left: 26px; right: 26px; top: 26px; border-radius: 26px; padding: 14px; display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+  .module { padding: 14px; }
+  .wide { grid-column: 1 / -1; }
+  .date small { color: #ff3b30; font-weight: 700; text-transform: uppercase; font-size: 11px; letter-spacing: .4px; }
+  .date .n { font-size: 44px; font-weight: 300; line-height: 1.05; }
+  .date .w { color: var(--muted); }
+  #clock { width: 100%; aspect-ratio: 1; display: block; }
+  .cal h3 { margin: 0 0 8px; font-size: 13px; font-weight: 700; }
+  .cal h3 span { color: #ff3b30; }
+  .cal table { width: 100%; border-collapse: collapse; text-align: center; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+  .cal th { color: var(--muted); font-weight: 600; padding: 2px 0 4px; font-size: 10.5px; }
+  .cal td { padding: 3px 0; }
+  .cal td.o { opacity: .3; }
+  .cal td.t span { background: #ff3b30; color: #fff; border-radius: 50%; display: inline-block; width: 22px; height: 22px; line-height: 22px; font-weight: 700; }
+  .empty { text-align: center; color: var(--muted); padding: 16px 0 6px; }
+</style>
+</head>
+<body>
+<div class="glass" id="nc">
+  <div class="module date"><small id="mon"></small><div class="n" id="day"></div><div class="w" id="wd"></div></div>
+  <div class="module"><svg id="clock" viewBox="0 0 100 100"></svg></div>
+  <div class="module wide cal" id="cal"></div>
+  <div class="module wide empty">No notifications</div>
+</div>
+<script>
+const $ = (s) => document.querySelector(s);
+let bg = null;
+function drawClock() {
+  const n = new Date(), h = n.getHours() % 12, m = n.getMinutes(), s = n.getSeconds();
+  const dark = document.documentElement.dataset.theme === "dark";
+  const face = dark ? "#1c1c1e" : "#fff", ink = dark ? "#f5f5f7" : "#1d1d1f";
+  let ticks = "";
+  for (let i = 0; i < 12; i++) {
+    const a = i * Math.PI / 6;
+    ticks += `<text x="${50 + 36 * Math.sin(a)}" y="${53.5 + -36 * Math.cos(a)}" text-anchor="middle" font-size="9" font-weight="600" fill="${ink}">${i || 12}</text>`;
+  }
+  const hand = (len, ang, w, col) => `<line x1="50" y1="50" x2="${50 + len * Math.sin(ang)}" y2="${50 - len * Math.cos(ang)}" stroke="${col}" stroke-width="${w}" stroke-linecap="round"/>`;
+  $("#clock").innerHTML = `<circle cx="50" cy="50" r="48" fill="${face}"/>${ticks}` +
+    hand(22, (h + m / 60) * Math.PI / 6, 3.2, ink) + hand(32, (m + s / 60) * Math.PI / 30, 2.2, ink) +
+    hand(36, s * Math.PI / 30, 1, "#ff9500") + `<circle cx="50" cy="50" r="2.4" fill="#ff9500"/>`;
+}
+function drawDate() {
+  const n = new Date(), y = n.getFullYear(), m = n.getMonth();
+  $("#mon").textContent = n.toLocaleDateString("en-GB", { month: "long" });
+  $("#day").textContent = n.getDate();
+  $("#wd").textContent = n.toLocaleDateString("en-GB", { weekday: "long" });
+  const start = (new Date(y, m, 1).getDay() + 6) % 7;
+  let h = `<h3><span>${n.toLocaleDateString("en-GB", { month: "long" })}</span> ${y}</h3><table><tr>`;
+  ["M", "T", "W", "T", "F", "S", "S"].forEach((d) => (h += `<th>${d}</th>`));
+  h += "</tr><tr>";
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(y, m, 1 - start + i);
+    if (i && i % 7 === 0) { if (d.getMonth() !== m) break; h += "</tr><tr>"; }
+    const cls = d.getMonth() !== m ? "o" : d.getDate() === n.getDate() ? "t" : "";
+    h += `<td class="${cls}"><span>${d.getDate()}</span></td>`;
+  }
+  $("#cal").innerHTML = h + "</tr></table>";
+}
+os.on("notify-open", (d) => { bg = d && d.bg; drawDate(); drawClock(); Glass.backdrop($("#nc"), Glass.snapshotCss(bg)); });
+os.on("settings", (s) => { Glass.applySettings(s); drawClock(); });
+os.settings.get().then((s) => { Glass.applySettings(s); drawDate(); drawClock(); });
+setInterval(drawClock, 1000);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") os.call("menu.do", ""); });
+document.addEventListener("mousedown", (e) => { if (!e.target.closest("#nc")) os.call("menu.do", ""); });
+document.addEventListener("contextmenu", (e) => e.preventDefault());
+</script>
+</body>
+</html>

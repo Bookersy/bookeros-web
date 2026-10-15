@@ -1,0 +1,158 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Spotlight</title>
+<link rel="stylesheet" href="glass.css">
+<script src="glass.js"></script>
+<style>
+  #panel { position: absolute; left: 26px; right: 26px; top: 26px; border-radius: 26px; }
+  .bar { display: flex; align-items: center; gap: 12px; padding: 0 20px; height: 58px; }
+  .bar svg.i { width: 22px; height: 22px; color: var(--muted); }
+  #q {
+    flex: 1; border: 0; outline: 0; background: transparent; color: var(--text);
+    font: 400 22px Inter, sans-serif; letter-spacing: -.2px;
+  }
+  #q::placeholder { color: var(--muted); }
+  #body { border-top: 1px solid var(--hairline); max-height: 440px; overflow-y: auto; padding: 8px 10px 12px; }
+  #body:empty { display: none; }
+  h4 { margin: 10px 10px 6px; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+  .res { display: flex; align-items: center; gap: 12px; padding: 6px 10px; border-radius: 10px; }
+  .res.on { background: var(--accent); color: var(--on-accent); }
+  .res .sub { margin-left: auto; font-size: 12px; opacity: .65; }
+  .res .ic { width: 30px; height: 30px; display: grid; place-items: center; }
+  .res .ic svg.i { width: 22px; height: 22px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 4px; padding: 0 4px; }
+  .tile { display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 10px 4px; border-radius: 14px; text-align: center; }
+  .tile:hover, .tile.on { background: var(--hover); }
+  .tile .nm { font-size: 12px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .big { font-size: 26px; font-weight: 300; }
+</style>
+</head>
+<body>
+<div class="glass" id="panel">
+  <div class="bar"><span id="sic"></span><input id="q" placeholder="Spotlight Search" autocomplete="off" spellcheck="false"></div>
+  <div id="body"></div>
+</div>
+<script>
+const $ = (s) => document.querySelector(s);
+const G = Glass;
+$("#sic").innerHTML = G.svg(G.ICONS.search);
+let apps = [], files = [], results = [], sel = 0, mode = "", lastBg = null;
+
+async function loadFiles() {
+  files = [];
+  async function walk(dir, depth) {
+    if (depth > 3 || files.length > 400) return;
+    let list = [];
+    try { list = await os.fs.list(dir); } catch { return; }
+    for (const e of list) {
+      const p = (dir ? dir + "/" : "") + e.name;
+      if (e.dir) await walk(p, depth + 1); else files.push(p);
+    }
+  }
+  await walk("", 0);
+}
+
+function calc(q) {
+  const t = q.replace(/×/g, "*").replace(/÷/g, "/").replace(/\^/g, "**");
+  if (!/^[\d\s+\-*/().%]+$/.test(t) || !/\d/.test(t) || !/[+\-*/%]/.test(t)) return null;
+  try { const v = Function(`"use strict";return (${t})`)(); return isFinite(v) ? +parseFloat(v.toPrecision(12)) : null; } catch { return null; }
+}
+
+function render() {
+  const q = $("#q").value.trim();
+  const low = q.toLowerCase();
+  const body = $("#body");
+  results = [];
+  body.innerHTML = "";
+  if (!q) {
+    if (mode !== "apps") { layout(); return; }
+    body.innerHTML = `<h4>Apps</h4><div class="grid"></div>`;
+    const grid = body.querySelector(".grid");
+    apps.forEach((a, i) => {
+      const t = document.createElement("div");
+      t.className = "tile" + (i === sel ? " on" : "");
+      t.innerHTML = G.icon(a, 54) + '<span class="nm"></span>';
+      t.querySelector(".nm").textContent = a.name;
+      t.onclick = () => launch(a.id);
+      grid.appendChild(t);
+      results.push({ run: () => launch(a.id) });
+    });
+    layout();
+    return;
+  }
+  const section = (title) => { const h = document.createElement("h4"); h.textContent = title; body.appendChild(h); };
+  const row = (icon, label, sub, run, big) => {
+    const i = results.length;
+    const d = document.createElement("div");
+    d.className = "res" + (i === sel ? " on" : "");
+    d.innerHTML = `<div class="ic">${icon}</div><div class="${big ? "big" : ""}"></div><div class="sub"></div>`;
+    d.children[1].textContent = label;
+    d.children[2].textContent = sub || "";
+    d.onclick = run;
+    d.onmouseenter = () => { sel = i; paint(); };
+    body.appendChild(d);
+    results.push({ run });
+  };
+  const v = calc(q);
+  if (v !== null) {
+    section("Calculator");
+    row(G.svg(G.ICONS.calc), "= " + v, "Copy", () => { navigator.clipboard && navigator.clipboard.writeText(String(v)); close(); }, true);
+  }
+  const ma = apps.filter((a) => a.name.toLowerCase().includes(low) || (a.description || "").toLowerCase().includes(low))
+    .sort((a, b) => a.name.toLowerCase().indexOf(low) - b.name.toLowerCase().indexOf(low)).slice(0, 6);
+  if (ma.length) {
+    section("Applications");
+    ma.forEach((a) => row(G.icon(a, 28), a.name, a.description || "", () => launch(a.id)));
+  }
+  const mf = files.filter((f) => f.toLowerCase().includes(low)).slice(0, 5);
+  if (mf.length) {
+    section("Documents");
+    mf.forEach((f) => row(G.svg(G.ICONS.file), f.split("/").pop(), f, () => openFile(f)));
+  }
+  section("Web");
+  const isUrl = /^[^\s]+\.[a-z]{2,}(\/.*)?$/i.test(q);
+  row(G.svg(G.ICONS.globe), isUrl ? "Open " + q : `Search the web for “${q}”`, "",
+      () => { os.call("browser.open", isUrl ? (/^https?:/.test(q) ? q : "https://" + q) : "https://duckduckgo.com/?q=" + encodeURIComponent(q)); });
+  if (sel >= results.length) sel = 0;
+  paint();
+  layout();
+}
+function paint() { document.querySelectorAll(".res,.tile").forEach((e, i) => e.classList.toggle("on", i === sel)); }
+function layout() { G.backdrop($("#panel"), G.snapshotCss(lastBg)); }
+function launch(id) { $("#q").value = ""; os.apps.launch(id); }
+function openFile(f) { $("#q").value = ""; os.apps.launch(/\.png$/i.test(f) ? "paint" : "notes", f); }
+function close() { os.call("popup.toggle", "spotlight", null); }
+
+$("#q").addEventListener("input", () => { sel = 0; if ($("#q").value) mode = ""; render(); });
+document.addEventListener("keydown", (e) => {
+  const cols = mode === "apps" && !$("#q").value ? Math.max(1, Math.floor(($(".grid") || { clientWidth: 100 }).clientWidth / 100)) : 1;
+  if (e.key === "Escape") { e.preventDefault(); close(); }
+  else if (e.key === "ArrowDown") { e.preventDefault(); sel = Math.min(results.length - 1, sel + cols); paint(); }
+  else if (e.key === "ArrowUp") { e.preventDefault(); sel = Math.max(0, sel - cols); paint(); }
+  else if (e.key === "ArrowRight" && cols > 1) { sel = Math.min(results.length - 1, sel + 1); paint(); }
+  else if (e.key === "ArrowLeft" && cols > 1) { sel = Math.max(0, sel - 1); paint(); }
+  else if (e.key === "Enter" && results[sel]) { e.preventDefault(); results[sel].run(); }
+  else if (document.activeElement !== $("#q") && e.key.length === 1 && !e.ctrlKey && !e.altKey) {
+    e.preventDefault(); $("#q").focus(); $("#q").value += e.key; sel = 0; mode = ""; render();
+  }
+}, true);
+document.addEventListener("mousedown", (e) => { if (!e.target.closest("#panel")) close(); });
+document.addEventListener("contextmenu", (e) => e.preventDefault());
+
+os.on("spotlight-open", (d) => {
+  d = d || {};
+  mode = d.mode || "apps";
+  lastBg = d.bg;
+  $("#q").value = ""; sel = 0;
+  render();
+  $("#q").focus(); setTimeout(() => $("#q").focus(), 30);
+  loadFiles();
+});
+os.on("apps", (a) => { apps = a; });
+os.on("settings", G.applySettings);
+Promise.all([os.apps.list(), os.settings.get()]).then(([a, s]) => { apps = a; G.applySettings(s); });
+</script>
+</body>
+</html>

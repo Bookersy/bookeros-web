@@ -48,7 +48,24 @@ USER_APPS = os.path.join(DATA, "apps")
 ICONS = os.path.join(DATA, "icons")
 DOCS = os.path.join(HOME, "Documents")
 PANEL_H = 48
+MENUBAR_H = 30
 BOOT_TIME = time.time()
+
+
+def read_edition():
+    e = os.environ.get("BOOKEROS_EDITION", "")
+    if not e:
+        try:
+            with open("/etc/bookeros-edition") as f:
+                e = f.read().strip()
+        except OSError:
+            e = "web"
+    return "glass" if e == "glass" else "web"
+
+
+EDITION = read_edition()
+GLASS = EDITION == "glass"
+OS_NAME = "BookerOS Glass" if GLASS else "BookerOS Web"
 
 ACCENTS = {
     "blue":   {"light": ["#0b57d0", "#ffffff", "#d3e3fd"], "dark": ["#a8c7fa", "#062e6f", "#0842a0"]},
@@ -58,11 +75,23 @@ ACCENTS = {
     "orange": {"light": ["#8b5000", "#ffffff", "#ffdcbe"], "dark": ["#ffb870", "#4a2800", "#693c00"]},
 }
 
+if GLASS:
+    # system-style colours: [accent, text on accent, soft tint]
+    ACCENTS = {
+        "blue":     {"light": ["#007aff", "#ffffff", "#d9e9ff"], "dark": ["#0a84ff", "#ffffff", "#163a61"]},
+        "purple":   {"light": ["#a550d6", "#ffffff", "#f0e1fa"], "dark": ["#bf5af2", "#ffffff", "#47255c"]},
+        "pink":     {"light": ["#f0346a", "#ffffff", "#ffdbe5"], "dark": ["#ff375f", "#ffffff", "#5e1d2b"]},
+        "orange":   {"light": ["#f08a00", "#ffffff", "#ffe9cc"], "dark": ["#ff9f0a", "#1d1d1f", "#5c3b0b"]},
+        "green":    {"light": ["#28a745", "#ffffff", "#d7f5df"], "dark": ["#32d74b", "#0b2a12", "#1d4d27"]},
+        "graphite": {"light": ["#7d7d84", "#ffffff", "#e6e6ea"], "dark": ["#98989d", "#1d1d1f", "#3a3a3d"]},
+    }
+
 DEFAULT_SETTINGS = {
-    "wallpaper": "meadow",
+    "wallpaper": "lake" if GLASS else "meadow",
     "accent": "blue",
     "theme": "light",
-    "pinned": ["browser", "files", "notes", "store", "settings"],
+    "pinned": (["files", "browser", "notes", "calculator", "clock", "store", "settings", "terminal"] if GLASS
+               else ["browser", "files", "notes", "store", "settings"]),
     "resolution": "",
     "username": os.environ.get("USER", "booker"),
     "hostname": socket.gethostname() or "bookeros",
@@ -330,6 +359,37 @@ def fetch_site_meta(url, app_id):
     return name, None
 
 
+def advertise_frame_extents():
+    """GTK only draws rounded, shadowed window frames if the window manager says it understands
+    _GTK_FRAME_EXTENTS. Openbox doesn't list it, so add it to the root window's _NET_SUPPORTED."""
+    import ctypes
+    import ctypes.util
+    try:
+        x = ctypes.CDLL(ctypes.util.find_library("X11") or "libX11.so.6")
+        x.XOpenDisplay.restype = ctypes.c_void_p
+        x.XOpenDisplay.argtypes = [ctypes.c_char_p]
+        x.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
+        x.XDefaultRootWindow.restype = ctypes.c_ulong
+        x.XInternAtom.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int]
+        x.XInternAtom.restype = ctypes.c_ulong
+        x.XChangeProperty.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_ulong,
+                                      ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_int]
+        x.XFlush.argtypes = [ctypes.c_void_p]
+        x.XCloseDisplay.argtypes = [ctypes.c_void_p]
+        dpy = x.XOpenDisplay(None)
+        if not dpy:
+            return
+        root = x.XDefaultRootWindow(dpy)
+        supported = x.XInternAtom(dpy, b"_NET_SUPPORTED", 0)
+        extents = x.XInternAtom(dpy, b"_GTK_FRAME_EXTENTS", 0)
+        data = (ctypes.c_ulong * 1)(extents)          # format-32 data is passed as C longs
+        x.XChangeProperty(dpy, root, supported, 4, 32, 2, data, 1)   # XA_ATOM, PropModeAppend
+        x.XFlush(dpy)
+        x.XCloseDisplay(dpy)
+    except Exception as e:
+        print("frame extents:", e)
+
+
 # --------------------------------------------------------------------------
 # App registry
 # --------------------------------------------------------------------------
@@ -419,6 +479,8 @@ class Registry:
 # --------------------------------------------------------------------------
 class Shell:
     def __init__(self):
+        if GLASS:
+            advertise_frame_extents()
         self.registry = Registry()
         self.settings = dict(DEFAULT_SETTINGS, **load_json(os.path.join(DATA, "settings.json"), {}))
         self.storage = load_json(os.path.join(DATA, "storage.json"), {})
@@ -439,11 +501,12 @@ class Shell:
             pass
 
         with open(os.path.join(UI, "bridge.js")) as f:
-            self.bridge_js = f.read()
+            self.bridge_js = f"window.__EDITION = {json.dumps(EDITION)};\n" + f.read()
 
         self.gtk_settings = Gtk.Settings.get_default()
-        self.gtk_settings.set_property("gtk-decoration-layout", "icon:minimize,maximize,close")
-        self.gtk_settings.set_property("gtk-font-name", "Roboto 10")
+        self.gtk_settings.set_property("gtk-decoration-layout",
+                                       "close,minimize,maximize:" if GLASS else "icon:minimize,maximize,close")
+        self.gtk_settings.set_property("gtk-font-name", "Inter 10" if GLASS else "Roboto 10")
         self.apply_gtk_theme()
         css = Gtk.CssProvider()
         css.load_from_data(b"""
@@ -462,9 +525,19 @@ class Shell:
             self.set_resolution(self.settings["resolution"])
 
         self.desktop = self.make_ui_window("desktop.html", Gdk.WindowTypeHint.DESKTOP)
-        self.panel = self.make_ui_window("panel.html", Gdk.WindowTypeHint.DOCK)
-        self.launcher = self.make_popup("launcher.html")
-        self.quick = self.make_popup("quick.html")
+        self.last_active_id = None
+        if GLASS:
+            self.menubar = self.make_ui_window("glass/menubar.html", Gdk.WindowTypeHint.DOCK)
+            self.panel = self.make_ui_window("glass/dock.html", Gdk.WindowTypeHint.DOCK)
+            self.popups = {n: self.make_popup(f"glass/{n}.html") for n in ("spotlight", "control", "notify", "menu")}
+            self.dock_size = (420, 86)
+            self.menu_data = None
+        else:
+            self.menubar = None
+            self.panel = self.make_ui_window("panel.html", Gdk.WindowTypeHint.DOCK)
+            self.launcher = self.make_popup("launcher.html")
+            self.quick = self.make_popup("quick.html")
+            self.popups = {"launcher": self.launcher, "quick": self.quick}
         self.layout()
         Gdk.Screen.get_default().connect("size-changed", lambda *a: GLib.timeout_add(300, self.layout))
 
@@ -533,19 +606,29 @@ class Shell:
         win.connect("focus-out-event", lambda *a: self.close_popups(by_focus=True))
         return win
 
+    def popup_key(self, name, data=None):
+        if name == "menu":
+            owner = (data or self.menu_data or {}).get("owner", "")
+            return "menu:" + str(owner)
+        return name
+
     def close_popups(self, by_focus=False):
-        for name, w in (("launcher", self.launcher), ("quick", self.quick)):
+        for name, w in self.popups.items():
             if w.get_visible() and by_focus:
-                # Pressing the Windows key (or clicking the shelf button) takes focus away
-                # just before the "toggle" arrives; remember this so the toggle closes it
+                # Pressing the Windows key (or clicking the button that opened it) takes focus
+                # away just before the "toggle" arrives; remember this so the toggle closes it
                 # instead of opening it again.
-                self.popup_closed_at[name] = time.monotonic()
+                self.popup_closed_at[self.popup_key(name)] = time.monotonic()
             w.hide()
-        self.emit_to(self.panel.view, "popup", None)
+        for bar in (self.panel, self.menubar):
+            if bar is not None:
+                self.emit_to(bar.view, "popup", None)
 
     def apply_gtk_theme(self):
         dark = self.settings.get("theme") == "dark"
         self.gtk_settings.set_property("gtk-application-prefer-dark-theme", dark)
+        if GLASS:
+            return self.apply_glass_theme(dark)
         bg, fg, hover = ("#2b2c2f", "#e3e3e3", "#3c3d41") if dark else ("#ffffff", "#1f1f1f", "#eceef2")
         edge = "#3c3d41" if dark else "#d5d9e0"
         css = f"""
@@ -565,8 +648,55 @@ class Shell:
                                                      Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 1)
         self.theme_css.load_from_data(css)
 
+    def apply_glass_theme(self, dark):
+        bg, fg = ("#2c2c2e", "#f5f5f7") if dark else ("#f6f6f6", "#1d1d1f")
+        edge = "rgba(255,255,255,.10)" if dark else "rgba(0,0,0,.18)"
+        idle = "#4a4a4d" if dark else "#d1d1d6"
+        css = f"""
+            headerbar, headerbar:backdrop {{
+                min-height: 40px; padding: 0 10px 0 14px; border: none; box-shadow: none;
+                background-image: none; background-color: {bg}; color: {fg};
+                border-radius: 14px 14px 0 0; }}
+            headerbar label {{ color: {fg}; }}
+            headerbar .title {{ font-weight: 600; font-size: 13px; }}
+            headerbar:backdrop .title {{ opacity: .55; }}
+            headerbar button {{ background: transparent; border: none; box-shadow: none; color: {fg};
+                                border-radius: 7px; min-width: 28px; min-height: 24px; }}
+            headerbar button:hover {{ background: rgba(127,127,127,.18); }}
+            headerbar entry {{ min-width: 420px; border-radius: 9px; }}
+            /* traffic-light window buttons */
+            headerbar button.titlebutton {{
+                min-width: 13px; min-height: 13px; padding: 0; margin: 0 7px 0 0;
+                border-radius: 50%; box-shadow: inset 0 0 0 .5px rgba(0,0,0,.18); }}
+            headerbar button.titlebutton image {{ opacity: 0; -gtk-icon-transform: scale(.55); color: rgba(0,0,0,.6); }}
+            headerbar:hover button.titlebutton image {{ opacity: 1; }}
+            headerbar button.titlebutton.close {{ background: #ff5f57; }}
+            headerbar button.titlebutton.minimize {{ background: #febc2e; }}
+            headerbar button.titlebutton.maximize {{ background: #28c840; }}
+            headerbar:backdrop button.titlebutton {{ background: {idle}; }}
+            headerbar:backdrop:hover button.titlebutton.close {{ background: #ff5f57; }}
+            headerbar:backdrop:hover button.titlebutton.minimize {{ background: #febc2e; }}
+            headerbar:backdrop:hover button.titlebutton.maximize {{ background: #28c840; }}
+            /* a thin invisible margin round each window works as its resize border */
+            decoration, decoration:backdrop {{
+                border-radius: 14px 14px 0 0; border: none; margin: 5px;
+                box-shadow: 0 0 0 1px {edge}; }}
+            window.maximized decoration, window.fullscreen decoration, window.tiled decoration {{
+                margin: 0; border-radius: 0; }}
+            window.maximized headerbar, window.fullscreen headerbar, window.tiled headerbar {{ border-radius: 0; }}
+            window.csd, window.csd:backdrop {{ background-color: transparent; }}
+            window.solid-csd decoration, window.solid-csd decoration:backdrop {{
+                padding: 0; border-radius: 0; box-shadow: none; }}
+            window.solid-csd headerbar {{ border-radius: 0; }}
+        """.encode()
+        if not hasattr(self, "theme_css"):
+            self.theme_css = Gtk.CssProvider()
+            Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), self.theme_css,
+                                                     Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 1)
+        self.theme_css.load_from_data(css)
+
     def public_settings(self):
-        return dict(self.settings, accents=ACCENTS)
+        return dict(self.settings, accents=ACCENTS, edition=EDITION)
 
     def rgba(self, win):
         vis = win.get_screen().get_rgba_visual()
@@ -611,6 +741,8 @@ class Shell:
         return mon.get_geometry()
 
     def layout(self):
+        if GLASS:
+            return self.layout_glass()
         g = self.screen_rect()
         self.desktop.move(g.x, g.y)
         self.desktop.resize(g.width, g.height)
@@ -626,7 +758,72 @@ class Shell:
         GLib.timeout_add(200, self.set_strut)
         return False
 
+    def layout_glass(self):
+        g = self.screen_rect()
+        self.desktop.move(g.x, g.y)
+        self.desktop.resize(g.width, g.height)
+        self.menubar.move(g.x, g.y)
+        self.menubar.resize(g.width, MENUBAR_H)
+        self.menubar.set_size_request(g.width, MENUBAR_H)
+        dw, dh = min(self.dock_size[0], g.width), self.dock_size[1]
+        dx, dy = g.x + (g.width - dw) // 2, g.y + g.height - dh
+        self.panel.set_size_request(dw, dh)
+        self.panel.resize(dw, dh)
+        self.panel.move(dx, dy)
+        geo = {"sw": g.width, "sh": g.height}
+        self.emit_to(self.panel.view, "geometry", dict(geo, x=dx - g.x, y=dy - g.y, w=dw, h=dh))
+        self.emit_to(self.menubar.view, "geometry", dict(geo, x=0, y=0, w=g.width, h=MENUBAR_H))
+        GLib.timeout_add(200, self.set_strut)
+        return False
+
+    POPUP_PAD = 26   # transparent room around glass popups so their soft shadows aren't cut off
+
+    def popup_rect(self, name, data):
+        """Where a Glass popup's visible panel goes; the window is that plus POPUP_PAD all round."""
+        g = self.screen_rect()
+        W, H = g.width, g.height
+        if name == "spotlight":
+            w, h = min(720, W - 60), min(520, H - 160)
+            x, y = (W - w) // 2, int(H * 0.15)
+        elif name == "control":
+            w, h = 360, min(440, H - MENUBAR_H - 40)
+            x, y = W - w - 8, MENUBAR_H + 6
+        elif name == "notify":
+            w, h = 380, min(600, H - MENUBAR_H - 40)
+            x, y = W - w - 8, MENUBAR_H + 6
+        elif name == "menu":
+            items = data.get("items", [])
+            h = 12 + sum(11 if it.get("sep") else 26 for it in items)
+            w = int(data.get("width", 250))
+            x = max(4, min(int(data.get("x", 0)), W - w - 4))
+            y = int(data["bottom"]) - h if data.get("bottom") is not None else MENUBAR_H + 2
+        else:
+            w, h, x, y = 300, 300, 0, 0
+        p = self.POPUP_PAD
+        return g.x + x - p, g.y + y - p, w + 2 * p, h + 2 * p
+
+    def snapshot(self, x, y, w, h):
+        """Grab what's on screen behind a popup, small, so it can be shown blurred (frosted glass)."""
+        try:
+            root = Gdk.get_default_root_window()
+            pb = Gdk.pixbuf_get_from_window(root, x, y, w, h)
+            if pb is None:
+                return None
+            pb = pb.scale_simple(max(1, w // 3), max(1, h // 3), GdkPixbuf.InterpType.BILINEAR)
+            ok, buf = pb.save_to_bufferv("jpeg", ["quality"], ["85"])
+            return "data:image/jpeg;base64," + base64.b64encode(buf).decode() if ok else None
+        except Exception as e:
+            print("snapshot:", e)
+            return None
+
     def set_strut(self):
+        if GLASS:
+            g = self.screen_rect()
+            self.apply_strut(self.menubar, f"0,0,{MENUBAR_H},0,0,0,0,0,{g.x},{g.x + g.width - 1},0,0",
+                             f"0,0,{MENUBAR_H},0")
+            dh = self.dock_size[1]
+            self.apply_strut(self.panel, f"0,0,0,{dh},0,0,0,0,0,0,{g.x},{g.x + g.width - 1}", f"0,0,0,{dh}")
+            return False
         gw = self.panel.get_window()
         if not gw:
             return True
@@ -642,25 +839,103 @@ class Shell:
             print("strut:", e)
         return False
 
-    def toggle_popup(self, which):
-        win = self.launcher if which == "launcher" else self.quick
+    def apply_strut(self, win, partial, simple):
+        gw = win.get_window()
+        if not gw:
+            return
+        xid = str(gw.get_xid())
+        subprocess.run(["xprop", "-id", xid, "-f", "_NET_WM_STRUT_PARTIAL", "32c",
+                        "-set", "_NET_WM_STRUT_PARTIAL", partial], check=False)
+        subprocess.run(["xprop", "-id", xid, "-f", "_NET_WM_STRUT", "32c", "-set", "_NET_WM_STRUT", simple],
+                       check=False)
+
+    def toggle_popup(self, which, data=None):
+        win = self.popups[which]
+        key = self.popup_key(which, data)
         if win.get_visible():
+            same = which != "menu" or key == self.popup_key("menu")
             self.close_popups()
-            return True
-        if time.monotonic() - self.popup_closed_at.get(which, 0) < 0.6:
-            self.popup_closed_at[which] = 0
+            if same:
+                return True
+        elif time.monotonic() - self.popup_closed_at.get(key, 0) < 0.6:
+            self.popup_closed_at[key] = 0
             return True
         self.close_popups()
-        self.layout()
+        payload = None
+        if GLASS:
+            data = data or {}
+            if which == "menu":
+                self.menu_data = data
+            x, y, w, h = self.popup_rect(which, data)
+            win.resize(w, h)
+            win.set_size_request(w, h)
+            win.move(x, y)
+            payload = dict(data, bg=self.snapshot(x, y, w, h))
+        else:
+            self.layout()
         win.show_all()
         win.present_with_time(Gdk.CURRENT_TIME)
         win.view.grab_focus()
-        self.emit_to(win.view, which + "-open", None)
-        self.emit_to(self.panel.view, "popup", which)
+        self.emit_to(win.view, which + "-open", payload)
+        for bar in (self.panel, self.menubar):
+            if bar is not None:
+                self.emit_to(bar.view, "popup", self.popup_key(which, data) if GLASS else which)
         return True
 
     def toggle_launcher(self, *a):
-        return self.toggle_popup("launcher")
+        return self.toggle_popup("spotlight" if GLASS else "launcher")
+
+    # ---- menu bar actions (Glass) -------------------------------------------
+    def active_window(self):
+        return self.windows.get(self.last_active_id)
+
+    def menu_action(self, act):
+        w = self.active_window()
+        if act.startswith("launch:"):
+            self.launch(act[7:])
+        elif act.startswith("focus:"):
+            t = self.windows.get(int(act[6:]))
+            if t:
+                t.deiconify()
+                t.present()
+        elif act == "about":
+            self.launch("settings", "about")
+        elif act == "settings":
+            self.launch("settings")
+        elif act == "help":
+            self.launch("welcome")
+        elif act in ("restart", "shutdown"):
+            self.power("reboot" if act == "restart" else "poweroff")
+        elif act == "spotlight":
+            self.toggle_popup("spotlight")
+        elif act == "newwindow":
+            self.launch(w.app_id if w and not w.app_id.startswith("native:") else "files")
+        elif act.startswith("pin:"):
+            pins = list(self.settings.get("pinned", []))
+            pid = act[4:]
+            pins.remove(pid) if pid in pins else pins.append(pid)
+            self.settings["pinned"] = pins
+            self.save_settings()
+        elif act.startswith("quit:"):
+            for t in list(self.windows.values()):
+                if t.app_id == act[5:]:
+                    t.destroy()
+        elif w is None:
+            return
+        elif act == "close":
+            w.destroy()
+        elif act == "minimize":
+            w.iconify()
+        elif act == "zoom":
+            w.unmaximize() if w.is_maximized() else w.maximize()
+        elif act == "fullscreen":
+            if isinstance(w, AppWindow):
+                w.fullscreen()
+                w.on_enter_fullscreen(w.view)
+        elif act.startswith("key:"):
+            w.present()
+            GLib.timeout_add(150, lambda: (subprocess.Popen(["xdotool", "key", "--clearmodifiers", act[4:]]),
+                                           False)[1])
 
     def tick(self):
         return True
@@ -683,6 +958,14 @@ class Shell:
                 self.emit_to(w.view, event, data)
 
     def windows_changed(self):
+        for w in self.windows.values():
+            try:
+                if w.is_active():
+                    self.last_active_id = w.wid
+            except Exception:
+                pass
+        if self.last_active_id not in self.windows:
+            self.last_active_id = None
         self.broadcast("windows", self.window_list())
 
     def window_list(self):
@@ -960,6 +1243,25 @@ class Shell:
         if method == "setup.finish":
             GLib.idle_add(lambda: (self.finish_setup(), False)[1])
             return True
+        if method == "popup.toggle":
+            GLib.idle_add(lambda: (self.toggle_popup(a[0], a[1]), False)[1])
+            return True
+        if method == "menu.open":
+            GLib.idle_add(lambda: (self.toggle_popup("menu", a[0]), False)[1])
+            return True
+        if method == "menu.do":
+            self.close_popups()
+            GLib.timeout_add(60, lambda: (self.menu_action(a[0]), False)[1])
+            return True
+        if method == "dock.size":
+            size = (int(a[0]), int(a[1]))
+            if size != self.dock_size:
+                self.dock_size = size
+                GLib.idle_add(self.layout)
+            return True
+        if method == "windows.active":
+            w = self.active_window()
+            return {"id": w.wid, "appId": w.app_id, "title": w.title_text} if w else None
         if method == "system.quick":
             return self.toggle_popup("quick")
         if method == "browser.open":
@@ -1051,7 +1353,7 @@ class Shell:
             up = float(open("/proc/uptime").read().split()[0])
         except Exception:
             up = time.time() - BOOT_TIME
-        return {"os": "BookerOS Web 1.0", "kernel": platform.release(), "cpu": cpu,
+        return {"os": OS_NAME + " 1.0", "kernel": platform.release(), "cpu": cpu,
                 "cores": os.cpu_count(), "memTotalMB": mem.get("MemTotal", 0) // 1024,
                 "memAvailMB": mem.get("MemAvailable", 0) // 1024, "uptime": int(up),
                 "ip": ip, "screen": f"{g.width}x{g.height}",
@@ -1132,6 +1434,12 @@ class Shell:
 class AppWindow(Gtk.Window):
     def __init__(self, shell, app, url, local, browser=False, related=None):
         super().__init__()
+        if GLASS:
+            # an alpha-capable window lets GTK draw rounded corners (don't make it app-paintable,
+            # or GTK stops drawing the frame)
+            vis = self.get_screen().get_rgba_visual()
+            if vis is not None and self.get_screen().is_composited():
+                self.set_visual(vis)
         self.shell = shell
         self.app = app
         self.app_id = app["id"]
@@ -1149,8 +1457,12 @@ class AppWindow(Gtk.Window):
         h = min(app.get("height", 640), g.height - PANEL_H - 40)
         self.set_default_size(w, h)
         n = len(shell.windows)
+        top = MENUBAR_H + 10 if GLASS else 10
+        bottom = shell.dock_size[1] if GLASS else PANEL_H
+        h = min(h, g.height - top - bottom - 10)
+        self.set_default_size(w, h)
         self.move(g.x + max(10, (g.width - w) // 2 + (n % 6) * 28 - 70),
-                  g.y + max(10, (g.height - PANEL_H - h) // 2 + (n % 6) * 28 - 70))
+                  g.y + max(top, top + (g.height - top - bottom - h) // 2 + (n % 6) * 28 - 70))
 
         if related is not None:
             self.view = WebKit2.WebView.new_with_related_view(related)
@@ -1166,7 +1478,8 @@ class AppWindow(Gtk.Window):
         self.set_title(app["name"])
         self.icon_box = Gtk.Box()
         self.icon_box.get_style_context().add_class("appicon")
-        hb.pack_start(self.icon_box)
+        if not GLASS:
+            hb.pack_start(self.icon_box)
         self.refresh_icon()
         self.title_label = Gtk.Label(label=app["name"])
         self.title_label.get_style_context().add_class("title")
@@ -1196,7 +1509,10 @@ class AppWindow(Gtk.Window):
                 hb.set_custom_title(self.entry)
 
         if not self.browser:
-            hb.pack_start(self.title_label)
+            if GLASS:
+                hb.set_custom_title(self.title_label)
+            else:
+                hb.pack_start(self.title_label)
 
         self.progress = Gtk.ProgressBar()
         self.progress.get_style_context().add_class("osd")
@@ -1389,6 +1705,15 @@ class NativeWindow:
 
     def iconify(self):
         self.ww.minimize()
+
+    def is_maximized(self):
+        return self.ww.is_maximized()
+
+    def maximize(self):
+        self.ww.maximize()
+
+    def unmaximize(self):
+        self.ww.unmaximize()
 
     def destroy(self):
         self.ww.close(self.shell.x_time())

@@ -1,0 +1,151 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Dock</title>
+<link rel="stylesheet" href="glass.css">
+<script src="../wallpapers.js"></script>
+<script src="glass.js"></script>
+<style>
+  body { display: flex; align-items: flex-end; justify-content: center; }
+  #dock {
+    display: inline-flex; flex: none; align-items: flex-end; gap: 6px; padding: 7px 8px 9px;
+    margin-bottom: 6px; border-radius: 26px;
+  }
+  .slot { position: relative; display: flex; flex-direction: column; align-items: center; }
+  .slot .app-icon { transition: transform .18s cubic-bezier(.3,.7,.4,1.4); }
+  .slot:hover .app-icon { transform: translateY(-5px) scale(1.06); }
+  .slot:active .app-icon { filter: brightness(.82); }
+  .dot { width: 4px; height: 4px; border-radius: 4px; margin-top: 3px; background: transparent; }
+  .slot.running .dot { background: var(--text); opacity: .75; }
+  #tip {
+    position: fixed; top: 4px; left: 0; transform: translateX(-50%);
+    padding: 3px 10px; border-radius: 7px; white-space: nowrap; font-size: 12.5px;
+    background: var(--tint-strong); box-shadow: 0 0 0 .5px var(--hairline), 0 4px 12px rgba(0,0,0,.2);
+    opacity: 0; transition: opacity .12s; pointer-events: none; z-index: 5;
+  }
+  #tip.show { opacity: 1; }
+  .divider { width: 1px; align-self: stretch; margin: 6px 3px 10px; background: var(--hairline); }
+  @keyframes bounce { 0%, 100% { transform: translateY(0); } 30% { transform: translateY(-16px); } 60% { transform: translateY(0); } 75% { transform: translateY(-6px); } }
+  .slot.bounce .app-icon { animation: bounce .8s ease 2; }
+  .apps-icon { background: linear-gradient(160deg, #7b8cff, #5b3ad6); color: #fff; }
+  .apps-icon svg { width: 60%; height: 60%; position: relative; z-index: 1; }
+</style>
+</head>
+<body>
+<div class="glass" id="dock"></div>
+<div id="tip"></div>
+<script>
+const $ = (s) => document.querySelector(s);
+const G = Glass;
+const SIZE = 52;
+let apps = [], wins = [], pinned = [], settings = null, geo = null;
+
+function render() {
+  const dock = $("#dock");
+  dock.querySelectorAll(".slot,.divider").forEach((e) => e.remove());
+  const ids = [...pinned];
+  const running = new Set(wins.map((w) => w.appId));
+  const extra = [];
+  wins.forEach((w) => { if (!ids.includes(w.appId) && !extra.includes(w.appId)) extra.push(w.appId); });
+
+  // "Apps" opens the app browser (Spotlight)
+  const appsSlot = document.createElement("div");
+  appsSlot.className = "slot";
+  appsSlot.innerHTML = `<div class="app-icon apps-icon" style="width:${SIZE}px;height:${SIZE}px">${G.svg(G.ICONS.grid)}</div><div class="dot"></div>`;
+  hoverTip(appsSlot, "Apps");
+  appsSlot.onclick = () => os.call("popup.toggle", "spotlight", { mode: "apps" });
+
+  const add = (id) => {
+    const a = apps.find((x) => x.id === id);
+    const mine = wins.filter((w) => w.appId === id);
+    if (!a && !mine.length) return;
+    const src = a || mine[0];
+    const name = a ? a.name : mine[0].title;
+    const el = document.createElement("div");
+    el.className = "slot" + (running.has(id) ? " running" : "");
+    el.innerHTML = G.icon(src, SIZE) + `<div class="dot"></div>`;
+    hoverTip(el, name);
+    el.onclick = () => {
+      if (!mine.length) {
+        el.classList.add("bounce");
+        setTimeout(() => el.classList.remove("bounce"), 1700);
+        return os.apps.launch(id);
+      }
+      const act = mine.findIndex((w) => w.active && !w.minimized);
+      const next = mine.length > 1 && act >= 0 ? mine[(act + 1) % mine.length] : mine[0];
+      os.windows.focus(next.id);
+    };
+    el.oncontextmenu = (e) => {
+      e.preventDefault();
+      const r = el.getBoundingClientRect();
+      const isPinned = pinned.includes(id);
+      const items = [
+        ...mine.map((w) => ({ label: w.title, action: "focus:" + w.id })),
+        ...(mine.length ? [{ sep: true }] : []),
+        { label: mine.length ? "New Window" : "Open", action: "launch:" + id },
+        { label: isPinned ? "Remove from Dock" : "Keep in Dock", action: "pin:" + id },
+        ...(mine.length ? [{ sep: true }, { label: "Quit", action: "quit:" + id }] : []),
+      ];
+      os.call("menu.open", { owner: "dock:" + id, x: Math.round((geo ? geo.x : 0) + r.left - 60), bottom: (geo ? geo.y : 0) + r.top - 6, items, width: 220 });
+    };
+    dock.appendChild(el);
+    return el;
+  };
+
+  if (ids.length) {
+    const first = ids[0];
+    add(first);
+    dock.appendChild(appsSlot);
+    ids.slice(1).forEach(add);
+  } else {
+    dock.appendChild(appsSlot);
+  }
+  if (extra.length) {
+    const d = document.createElement("div"); d.className = "divider"; dock.appendChild(d);
+    extra.forEach(add);
+  }
+  requestAnimationFrame(report);
+}
+
+function hoverTip(el, text) {
+  el.addEventListener("mouseenter", () => {
+    const r = el.getBoundingClientRect(), t = $("#tip");
+    t.textContent = text;
+    t.style.left = (r.left + r.width / 2) + "px";
+    t.classList.add("show");
+  });
+  el.addEventListener("mouseleave", () => $("#tip").classList.remove("show"));
+  el.addEventListener("mousedown", () => $("#tip").classList.remove("show"));
+}
+
+// Tell the shell how big the dock is, so it can size and centre this window
+let last = "";
+function report() {
+  const d = $("#dock");
+  const w = Math.ceil(d.getBoundingClientRect().width) + 24, h = 116;
+  const key = w + "x" + h;
+  if (key !== last) { last = key; os.call("dock.size", w, h); }
+  backdrop();
+}
+
+// The dock shows a blurred copy of the wallpaper behind it
+function backdrop() {
+  if (!settings || !geo) return;
+  G.backdrop($("#dock"), wallpaperFor(settings.wallpaper).css, { x: -geo.x, y: -geo.y, w: geo.sw, h: geo.sh });
+}
+
+os.on("geometry", (g) => { geo = g; backdrop(); });
+os.on("windows", (w) => { wins = w; render(); });
+os.on("apps", (a) => { apps = a; render(); });
+os.on("settings", (s) => { settings = s; G.applySettings(s); pinned = s.pinned || []; render(); });
+addEventListener("resize", backdrop);
+document.addEventListener("mouseleave", () => $("#tip").classList.remove("show"));
+addEventListener("blur", () => $("#tip").classList.remove("show"));
+Promise.all([os.apps.list(), os.windows.list(), os.settings.get()]).then(([a, w, s]) => {
+  apps = a; wins = w; settings = s; pinned = s.pinned || []; G.applySettings(s); render();
+});
+document.addEventListener("contextmenu", (e) => e.preventDefault());
+</script>
+</body>
+</html>

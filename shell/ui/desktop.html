@@ -14,7 +14,7 @@
 <div id="wall"></div>
 <script>
 function applySettings(s) {
-  const w = WALLPAPERS[s.wallpaper] || WALLPAPERS.meadow;
+  const w = wallpaperFor(s.wallpaper);
   document.getElementById("wall").style.background = w.css;
 }
 document.addEventListener("contextmenu", (e) => { e.preventDefault(); os.apps.launch("settings", "wallpaper"); });

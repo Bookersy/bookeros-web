@@ -1,5 +1,7 @@
 #!/bin/bash
-# Build the BookerOS Web live ISO.
+# Build a BookerOS live ISO.
+#   EDITION=web   (default) ChromeOS-style shelf and launcher   -> bookeros-web.iso
+#   EDITION=glass           glassy menu bar, dock and Spotlight -> bookeros-glass.iso
 # Usage: sudo ./build.sh [workdir]
 # Needs: debootstrap squashfs-tools grub-pc-bin grub-efi-amd64-bin xorriso mtools curl
 set -euo pipefail
@@ -7,10 +9,15 @@ SRC="$(cd "$(dirname "$0")" && pwd)"
 WORK="${1:-$SRC/../webos-build}"
 R="$WORK/rootfs"
 ISO="$WORK/iso"
-OUT="${OUT:-$WORK/bookeros-web.iso}"
+EDITION="${EDITION:-web}"
+case "$EDITION" in
+  glass) NAME="BookerOS Glass"; VOLID=BOOKEROS_GLASS ;;
+  *)     EDITION=web; NAME="BookerOS Web"; VOLID=BOOKEROS_WEB ;;
+esac
+OUT="${OUT:-$WORK/bookeros-$EDITION.iso}"
 PACKAGES="linux-image-virtual casper initramfs-tools systemd-sysv systemd-resolved libpam-systemd dbus udev kmod sudo
   iproute2 iputils-ping ca-certificates locales tzdata less nano procps
-  xserver-xorg-core xserver-xorg-input-libinput xserver-xorg-video-fbdev xserver-xorg-video-vesa xserver-xorg-legacy xinit x11-xserver-utils x11-utils openbox xcompmgr xcape
+  xserver-xorg-core xserver-xorg-input-libinput xserver-xorg-video-fbdev xserver-xorg-video-vesa xserver-xorg-legacy xinit x11-xserver-utils x11-utils openbox xcompmgr xcape xdotool
   python3 python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 gir1.2-wnck-3.0 libwebkit2gtk-4.1-0 glib-networking
   gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav
   adwaita-icon-theme-full librsvg2-common libgl1-mesa-dri
@@ -77,6 +84,7 @@ rm -rf "$R/opt/bookeros"; mkdir -p "$R/opt/bookeros"
 cp -r "$SRC/shell/." "$R/opt/bookeros/"
 find "$R/opt/bookeros" -name '__pycache__' -prune -exec rm -rf {} +
 install -m 755 "$SRC/system/bookeros-session" "$R/usr/local/bin/bookeros-session"
+echo "$EDITION" > "$R/etc/bookeros-edition"
 install -m 644 "$SRC/system/openbox-rc.xml" "$R/etc/xdg/openbox/bookeros-rc.xml"
 
 # start X on tty1 after automatic login
@@ -110,11 +118,11 @@ echo bookeros > "$R/etc/hostname"
 printf '127.0.0.1 localhost\n127.0.1.1 bookeros\n' > "$R/etc/hosts"
 echo 'LANG=en_GB.UTF-8' > "$R/etc/default/locale"
 ln -sf /usr/share/zoneinfo/Europe/London "$R/etc/localtime"; echo Europe/London > "$R/etc/timezone"
-printf 'BookerOS Web 1.0 \\l\n\n' > "$R/etc/issue"; echo "BookerOS Web 1.0" > "$R/etc/issue.net"
+printf '%s 1.0 \\l\n\n' "$NAME" > "$R/etc/issue"; echo "$NAME 1.0" > "$R/etc/issue.net"
 touch "$R/etc/skel/.hushlogin"; rm -f "$R"/etc/update-motd.d/*
 cat > "$R/etc/os-release" <<'EOF'
-PRETTY_NAME="BookerOS Web 1.0"
-NAME="BookerOS Web"
+PRETTY_NAME="__NAME__ 1.0"
+NAME="__NAME__"
 VERSION_ID="1.0"
 VERSION="1.0"
 ID=bookeros
@@ -122,6 +130,7 @@ ID_LIKE=ubuntu
 VERSION_CODENAME=noble
 UBUNTU_CODENAME=noble
 EOF
+sed -i "s/__NAME__/$NAME/g" "$R/etc/os-release"
 chroot "$R" bash -c "locale-gen en_GB.UTF-8 >/dev/null; systemctl enable NetworkManager systemd-resolved >/dev/null 2>&1 || true; systemctl mask systemd-networkd-wait-online.service >/dev/null 2>&1 || true; update-initramfs -u >/dev/null"
 ln -sf ../run/systemd/resolve/stub-resolv.conf "$R/etc/resolv.conf"
 rm -f "$R/usr/sbin/policy-rc.d"; : > "$R/etc/machine-id"; rm -rf "$R/tmp/"* "$R/var/lib/apt/lists/"*
@@ -139,14 +148,15 @@ set default=0
 insmod all_video
 set menu_color_normal=white/black
 set menu_color_highlight=black/light-gray
-menuentry "BookerOS Web" {
+menuentry "__NAME__" {
     linux /casper/vmlinuz boot=casper username=booker hostname=bookeros userfullname=Booker noprompt quiet splash loglevel=3 systemd.show_status=false rd.systemd.show_status=false vt.global_cursor_default=0 ---
     initrd /casper/initrd
 }
-menuentry "BookerOS Web (safe graphics)" {
+menuentry "__NAME__ (safe graphics)" {
     linux /casper/vmlinuz boot=casper username=booker hostname=bookeros userfullname=Booker noprompt nomodeset systemd.show_status=false ---
     initrd /casper/initrd
 }
 EOF
-grub-mkrescue -o "$OUT" "$ISO" -- -volid BOOKEROS_WEB
+sed -i "s/__NAME__/$NAME/g" "$ISO/boot/grub/grub.cfg"
+grub-mkrescue -o "$OUT" "$ISO" -- -volid "$VOLID"
 ls -lh "$OUT"

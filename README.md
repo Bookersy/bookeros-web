@@ -1,12 +1,29 @@
-# BookerOS Web
+# BookerOS
 
-A graphical operating system where **every app is a web app**. It boots straight
-into a ChromeOS-style desktop: a shelf at the bottom, a round launcher button,
-Quick Settings behind the clock, and apps that each open in their own window.
+An operating system where **every app is a web app**, in two editions built from the same code:
 
-Under the hood it is a small Ubuntu 24.04 live system running X11, Openbox and a
-desktop shell written in Python + WebKitGTK. The desktop, shelf, launcher, setup
-wizard and every built-in app are HTML/CSS/JS.
+| Edition | ISO | Look |
+|---|---|---|
+| **BookerOS Web** | `bookeros-web.iso` | ChromeOS-style: shelf at the bottom, round launcher, Quick Settings behind the clock |
+| **BookerOS Glass** | `bookeros-glass.iso` | Inspired by the "liquid glass" style of macOS 26 Tahoe: see-through menu bar, frosted dock, Spotlight, Control Center, Notification Center, traffic-light window buttons and rounded windows |
+
+BookerOS Glass is an original design inspired by that style; it isn't affiliated with Apple and
+uses its own wallpapers, logo and icons.
+
+Under the hood both are a small Ubuntu 24.04 live system running X11, Openbox and a
+desktop shell written in Python + WebKitGTK. The desktop, panels, setup wizard and every
+built-in app are HTML/CSS/JS.
+
+### Glass edition at a glance
+
+| | |
+|---|---|
+| Spotlight | tap the **Windows key**, or click the magnifier in the menu bar. Empty search shows all apps; it also does sums and searches files and the web |
+| Dock | click to open or switch; right-click for *Keep in Dock* / *Remove from Dock* / *Quit*. The grid icon shows all apps |
+| Menu bar | the mountain logo has About, Settings, Restart and Shut Down; app menus have New/Close Window, Cut/Copy/Paste, Full Screen, Minimise and a window list |
+| Control Center | the switches icon: Wi-Fi, Dark Mode, accent colour, wallpaper, power |
+| Notification Center | click the date and time: calendar and clock |
+| Shortcuts | **Win+W** close · **Win+Q** quit · **Win+M** minimise · **Alt/Win+Tab** switch · **F11** full screen |
 
 ## Run it in VirtualBox
 
@@ -16,7 +33,7 @@ wizard and every built-in app are HTML/CSS/JS.
 3. Settings → Display → Graphics Controller **VMSVGA**, Video Memory **128 MB**.
    Leave 3D acceleration off.
 4. Settings → Network → Adapter 1 **NAT** (the default) so web apps work.
-5. Settings → Storage → optical drive → choose **bookeros-web.iso**. Start.
+5. Settings → Storage → optical drive → choose **bookeros-web.iso** (or **bookeros-glass.iso**). Start.
 
 First boot opens the **setup wizard**: theme, accent colour, wallpaper, your name,
 the computer's hostname, and a network to connect to.
@@ -81,7 +98,8 @@ repository and every change produces a downloadable ISO on the Releases page.
 
 ```sh
 apt install debootstrap squashfs-tools grub-pc-bin grub-efi-amd64-bin xorriso mtools curl
-./build.sh /path/to/workdir
+./build.sh /path/to/workdir                 # Web edition
+EDITION=glass ./build.sh /path/to/workdir   # Glass edition
 ```
 
 Layout: `shell/shell.py` (window manager glue + `window.os` bridge), `shell/ui/`

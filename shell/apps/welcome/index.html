@@ -33,6 +33,19 @@
   <button class="primary" id="done">Get started</button>
 </div>
 <script>
+if (os.edition === "glass") {
+  document.querySelector(".lead").textContent = "A glassy desktop where every app is a web app. Here's how to get around.";
+  const tips = [
+    ["🔍", "Spotlight", "Tap the Windows key, or click the magnifier in the menu bar, to find apps, files and websites."],
+    ["🗂️", "The Dock", "Your favourite apps live at the bottom. Right-click an icon to keep it in the Dock or remove it."],
+    ["🛍️", "App Store", "Turn any website into an app with its own window, icon and name. Firefox is your full browser."],
+    ["🎛️", "Control Center", "The switches icon at the top-right has Dark Mode, accent colours, wallpapers and power."],
+    ["📅", "Notification Center", "Click the date and time for your calendar and a clock."],
+    ["⌨️", "Shortcuts", "Win+W close · Win+Q quit · Win+M minimise · Alt+Tab switch · F11 full screen."],
+  ];
+  document.querySelector(".tips").innerHTML = tips.map(([i, t, d]) => `<div class="tip"><div>${i}</div><div><b>${t}</b><span>${d}</span></div></div>`).join("");
+  document.querySelector("h1").textContent = "Welcome to BookerOS Glass";
+}
 document.getElementById("done").onclick = () => { os.storage.set("welcome.seen", true); os.app.close(); };
 </script>
 </body>

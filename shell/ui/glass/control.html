@@ -1,0 +1,124 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Control Center</title>
+<link rel="stylesheet" href="glass.css">
+<script src="../wallpapers.js"></script>
+<script src="glass.js"></script>
+<style>
+  #cc { position: absolute; left: 26px; right: 26px; top: 26px; border-radius: 24px; padding: 12px; display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
+  .module { padding: 12px; }
+  .wide { grid-column: 1 / -1; }
+  .toggle { display: flex; align-items: center; gap: 10px; padding: 4px 0; border-radius: 12px; }
+  .toggle + .toggle { margin-top: 8px; }
+  .dot {
+    width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; flex: none;
+    background: rgba(127,127,127,.25); color: var(--text);
+  }
+  .dot svg.i { width: 16px; height: 16px; }
+  .on .dot { background: var(--accent); color: var(--on-accent); }
+  .toggle b { display: block; font-weight: 600; font-size: 13px; }
+  .toggle small { display: block; color: var(--muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
+  .title { font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .title svg.i { width: 15px; height: 15px; color: var(--muted); }
+  .accs { display: flex; gap: 8px; flex-wrap: wrap; }
+  .acc { width: 22px; height: 22px; border-radius: 50%; box-shadow: inset 0 0 0 .5px rgba(0,0,0,.2); }
+  .acc.sel { outline: 2px solid var(--text); outline-offset: 2px; }
+  .walls { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .wall { aspect-ratio: 16/10; border-radius: 8px; box-shadow: inset 0 0 0 .5px rgba(0,0,0,.2); }
+  .wall.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(160deg, var(--accent), #5b3ad6); color: #fff; display: grid; place-items: center; font-weight: 700; }
+  .round { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: rgba(127,127,127,.2); }
+  .round:hover { background: rgba(127,127,127,.32); }
+  .round svg.i { width: 15px; height: 15px; }
+  .spacer { flex: 1; }
+</style>
+</head>
+<body>
+<div class="glass" id="cc">
+  <div class="module">
+    <div class="toggle" id="net"><div class="dot" id="netic"></div><div><b>Wi-Fi</b><small id="netinfo">Checking…</small></div></div>
+    <div class="toggle" id="dark"><div class="dot" id="darkic"></div><div><b>Dark Mode</b><small id="darkinfo">Off</small></div></div>
+  </div>
+  <div class="module">
+    <div class="title" id="dispt"></div>
+    <div class="toggle" id="display"><div class="dot" id="dispic"></div><div><b>Display</b><small id="res"></small></div></div>
+    <div class="toggle" id="settings"><div class="dot" id="setic"></div><div><b>Settings</b><small>All options</small></div></div>
+  </div>
+  <div class="module wide">
+    <div class="title"><span id="palic"></span>Accent colour</div>
+    <div class="accs" id="accs"></div>
+  </div>
+  <div class="module wide">
+    <div class="title"><span id="imgic"></span>Wallpaper</div>
+    <div class="walls" id="walls"></div>
+  </div>
+  <div class="module wide row">
+    <div class="avatar" id="av">B</div>
+    <div><b id="user">booker</b><div style="color:var(--muted);font-size:11.5px" id="host"></div></div>
+    <div class="spacer"></div>
+    <button class="round" id="restart" title="Restart"></button>
+    <button class="round" id="off" title="Shut Down"></button>
+  </div>
+</div>
+<script>
+const $ = (s) => document.querySelector(s);
+const G = Glass, I = G.ICONS;
+$("#netic").innerHTML = G.svg(I.wifi); $("#darkic").innerHTML = G.svg(I.moon); $("#dispic").innerHTML = G.svg(I.display);
+$("#setic").innerHTML = G.svg(I.gear); $("#palic").innerHTML = G.svg(I.palette); $("#imgic").innerHTML = G.svg(I.image);
+$("#restart").innerHTML = G.svg(I.restart); $("#off").innerHTML = G.svg(I.power);
+let s = {}, bg = null;
+const go = (action) => os.call("menu.do", action);
+
+function show(n) {
+  s = n;
+  G.applySettings(n);
+  $("#dark").classList.toggle("on", n.theme === "dark");
+  $("#darkinfo").textContent = n.theme === "dark" ? "On" : "Off";
+  $("#user").textContent = n.username; $("#av").textContent = (n.username || "B")[0].toUpperCase();
+  $("#host").textContent = n.hostname || "";
+  $("#accs").innerHTML = "";
+  Object.entries(n.accents || {}).forEach(([k, v]) => {
+    const d = document.createElement("div");
+    d.className = "acc" + (k === n.accent ? " sel" : "");
+    d.style.background = (n.theme === "dark" ? v.dark : v.light)[0];
+    d.title = k; d.onclick = () => os.settings.set("accent", k);
+    $("#accs").appendChild(d);
+  });
+  $("#walls").innerHTML = "";
+  ["lake", "liquid", "dunes", "night"].forEach((k) => {
+    const d = document.createElement("div");
+    d.className = "wall" + (k === n.wallpaper ? " sel" : "");
+    d.style.background = WALLPAPERS[k].css; d.title = WALLPAPERS[k].name;
+    d.onclick = () => os.settings.set("wallpaper", k);
+    $("#walls").appendChild(d);
+  });
+  G.backdrop($("#cc"), G.snapshotCss(bg));
+}
+function refresh() {
+  os.system.info().then((i) => {
+    $("#res").textContent = i.screen;
+  });
+  os.net.status().then((st) => {
+    const c = (st.devices || []).find((d) => d.state && d.state.startsWith("connected"));
+    $("#net").classList.toggle("on", !!c);
+    $("#netinfo").textContent = c ? (c.type === "wifi" ? c.connection : "Ethernet · " + (st.ip || "")) : "Not connected";
+  }).catch(() => {});
+}
+$("#dark").onclick = () => os.settings.set("theme", s.theme === "dark" ? "light" : "dark");
+$("#display").onclick = () => { go(""); os.apps.launch("settings", "display"); };
+$("#settings").onclick = () => go("settings");
+$("#net").onclick = () => { go(""); os.apps.launch("settings", "network"); };
+$("#restart").onclick = () => go("restart");
+$("#off").onclick = () => go("shutdown");
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") go(""); });
+document.addEventListener("mousedown", (e) => { if (!e.target.closest("#cc")) go(""); });
+document.addEventListener("contextmenu", (e) => e.preventDefault());
+os.on("settings", show);
+os.on("control-open", (d) => { bg = d && d.bg; show(s); refresh(); });
+os.settings.get().then(show);
+</script>
+</body>
+</html>

@@ -1,6 +1,11 @@
 /* BookerOS Web bridge — injected into local apps and shell pages only. */
 (function () {
   if (window.os) return;
+  const ED = window.__EDITION || "web";
+  (function mark() {
+    if (document.documentElement) document.documentElement.dataset.edition = ED;
+    else requestAnimationFrame(mark);
+  })();
   let seq = 0;
   const pending = {};
   const listeners = {};
@@ -24,6 +29,7 @@
     },
     on(ev, f) { (listeners[ev] = listeners[ev] || []).push(f); },
     call,
+    edition: ED,
     /* Markup for an app's round icon: the site's own icon on white, or the emoji on its colour. */
     tile(a, cls, extra) {
       const q = (t) => String(t == null ? "" : t).replace(/[&"<>]/g, (c) => ({ "&": "&amp;", '"': "&quot;", "<": "&lt;", ">": "&gt;" }[c]));
